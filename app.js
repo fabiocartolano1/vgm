@@ -1,10 +1,6 @@
 const RAWG_BASE = "https://api.rawg.io/api/games";
 
 // Consoles autorisées (voir consoles.txt) -> IDs plateformes RAWG.
-// PC a ~560k jeux sur RAWG contre quelques centaines/milliers pour les consoles
-// rétro : si on pioche sur l'ensemble des plateformes réunies, PC écrase tout le
-// reste. On tire donc une plateforme au hasard (chance égale) AVANT de piocher
-// un jeu, pour que chaque console de la liste ait vraiment sa chance.
 const ALLOWED_PLATFORMS = [
   4,   // PC
   27,  // PlayStation 1
@@ -31,31 +27,64 @@ const ALLOWED_PLATFORMS = [
 const ALLOWED_PLATFORMS_PARAM = ALLOWED_PLATFORMS.join(",");
 
 const CARDS_PER_PACK = 5;
-const RAWG_PAGE_CAP = 10000; // pagination max imposée par RAWG, quel que soit le filtre
-
-const platformCountCache = {};
-
-async function getPlatformCount(platformId) {
-  if (platformCountCache[platformId]) return platformCountCache[platformId];
-  const res = await fetch(`${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&platforms=${platformId}`);
-  const data = await res.json();
-  const count = Math.min(data.count || 1, RAWG_PAGE_CAP);
-  platformCountCache[platformId] = count;
-  return count;
-}
 
 // Rareté basée sur "added" (nb réel de joueurs ayant ajouté le jeu sur RAWG),
 // l'équivalent jeu vidéo des vues mensuelles d'un article Wikipédia.
-// Seuils calibrés sur un échantillon réel du tirage par plateforme (voir notes de
-// session) pour que Légendaire reste réservé aux jeux vraiment connus (~1,5% des tirages).
+// packOdds = chance que la MEILLEURE carte du paquet soit de cette rareté.
 const RARITIES = [
-  { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0 },
-  { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 20 },
-  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 80 },
-  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 300 },
-  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 1200 },
-  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000 },
+  { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0,    packOdds: 0.575 },
+  { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 20,   packOdds: 0.15 },
+  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 80,   packOdds: 0.14 },
+  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 300,  packOdds: 0.08 },
+  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 1200, packOdds: 0.04 },
+  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
 ];
+
+// Chance par carte déduite de la chance par paquet :
+// P(meilleure >= k) = 1 - (1 - p(carte >= k))^5
+(function computeCardOdds() {
+  let packAtLeast = 0;
+  let cardAtLeastAbove = 0;
+  for (let i = RARITIES.length - 1; i >= 0; i--) {
+    packAtLeast += RARITIES[i].packOdds;
+    const cardAtLeast = 1 - Math.pow(1 - Math.min(packAtLeast, 1), 1 / CARDS_PER_PACK);
+    RARITIES[i].cardOdds = cardAtLeast - cardAtLeastAbove;
+    cardAtLeastAbove = cardAtLeast;
+  }
+})();
+
+// Par console, nb de jeux (triés par -added, pagination RAWG plafonnée à 10 000)
+// ayant added >= [20, 80, 300, 1200, 6000], précalculé le 2026-09-27.
+// Format : [accessibles, >=20, >=80, >=300, >=1200, >=6000]
+const TIER_RANKS = {
+  4:   [10000, 10000, 10000, 6950, 2267, 290],
+  27:  [1699, 586, 258, 100, 33, 1],
+  15:  [3151, 967, 534, 235, 76, 9],
+  16:  [3209, 1940, 1442, 938, 486, 102],
+  18:  [7050, 4656, 3505, 2236, 1083, 189],
+  187: [1565, 1116, 804, 453, 183, 27],
+  80:  [881, 435, 280, 143, 61, 9],
+  14:  [2834, 1837, 1411, 901, 481, 110],
+  1:   [5750, 3929, 3101, 2062, 1064, 192],
+  186: [1301, 965, 732, 432, 171, 21],
+  7:   [5807, 3546, 2570, 1502, 652, 98],
+  9:   [2507, 447, 245, 104, 33, 3],
+  8:   [1682, 468, 275, 130, 51, 3],
+  19:  [1462, 781, 580, 340, 143, 23],
+  17:  [1457, 409, 226, 102, 26, 0],
+  10:  [1114, 533, 368, 208, 84, 15],
+  11:  [2238, 743, 440, 201, 62, 4],
+  105: [673, 342, 202, 83, 28, 2],
+  83:  [363, 146, 73, 32, 10, 1],
+  43:  [431, 117, 49, 23, 6, 0],
+  24:  [967, 358, 185, 69, 14, 0],
+};
+
+// Plage de rangs [start, end) de la rareté d'index i sur une console.
+function tierRange(platformId, i) {
+  const t = TIER_RANKS[platformId];
+  return [t[i + 1] ?? 0, t[i]];
+}
 
 function rarityForAdded(added) {
   let result = RARITIES[0];
@@ -157,10 +186,26 @@ function truncate(text, max) {
   return clean.length > max ? clean.slice(0, max).trim() + "…" : clean;
 }
 
-async function drawOneGame(platformId) {
-  const count = await getPlatformCount(platformId);
-  const page = 1 + Math.floor(Math.random() * count);
-  const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${page}&platforms=${platformId}&ordering=name`;
+function rollTierIndex() {
+  let r = Math.random();
+  for (let i = RARITIES.length - 1; i > 0; i--) {
+    r -= RARITIES[i].cardOdds;
+    if (r < 0) return i;
+  }
+  return 0;
+}
+
+// Console au hasard (chance égale) parmi celles qui ont des jeux de cette rareté,
+// puis un jeu au hasard dans la tranche du classement correspondante.
+async function drawOneGame(tierIndex) {
+  const eligible = ALLOWED_PLATFORMS.filter((p) => {
+    const [start, end] = tierRange(p, tierIndex);
+    return end > start;
+  });
+  const platformId = eligible[Math.floor(Math.random() * eligible.length)];
+  const [start, end] = tierRange(platformId, tierIndex);
+  const rank = start + Math.floor(Math.random() * (end - start));
+  const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${rank + 1}&platforms=${platformId}&ordering=-added`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("RAWG error " + res.status);
   const data = await res.json();
@@ -168,13 +213,8 @@ async function drawOneGame(platformId) {
 }
 
 async function drawPack() {
-  // Une plateforme au hasard par carte, à chance égale, pour ne pas laisser
-  // le catalogue PC (bien plus fourni) écraser les consoles rétro demandées.
-  const chosenPlatforms = Array.from(
-    { length: CARDS_PER_PACK },
-    () => ALLOWED_PLATFORMS[Math.floor(Math.random() * ALLOWED_PLATFORMS.length)]
-  );
-  const games = (await Promise.all(chosenPlatforms.map(drawOneGame))).filter(Boolean);
+  const tiers = Array.from({ length: CARDS_PER_PACK }, rollTierIndex);
+  const games = (await Promise.all(tiers.map(drawOneGame))).filter(Boolean);
 
   const details = await Promise.all(games.map((g) => fetchGameDetail(g.id)));
 
