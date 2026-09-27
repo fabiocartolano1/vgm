@@ -1,0 +1,8 @@
+# Secrets
+apikey.txt
+config.js
+
+# Firebase
+.firebase/
+*.log
+node_modules/

@@ -1,0 +1,56 @@
+Spec : ouverture de paquets (inspirée de WikiMasters)
+
+Concept
+
+Chaque carte est générée à partir d'un vrai article Wikipédia : titre de l'article, image principale (ou logo par défaut si pas d'image), résumé de l'article tronqué, plus deux stats en bas (ATK avec une icône d'épées rouges, DEF avec une icône de bouclier bleu).
+La rareté dépend du nombre de vues mensuelles de l'article :
+C (Commune) : moins de 50 vues par mois, couleur vert menthe 
+#b8f2d5
+PC (Peu commune) : 50 vues ou plus, bleu clair 
+#b1cff2
+R (Rare) : 250 ou plus, violet 
+#c6a7f2
+SR (Super rare) : 1 000 ou plus, rose 
+#ed6fa3
+UR (Ultra rare) : 5 000 ou plus, orange 
+#fa9931
+L (Légendaire) : 20 000 ou plus, jaune 
+#ffe144
+
+Règles des paquets
+
+Un paquet contient 5 cartes, triées par rareté croissante : la meilleure carte arrive en dernier.
+On peut stocker au maximum 10 paquets. Un paquet se régénère toutes les 10 minutes.
+Sous le paquet, un compteur affiche « 9 / 10 paquets disponibles » et, sous le maximum, « Prochain dans m:ss ».
+Un lien « Comment ça marche ? » ouvre une fenêtre qui explique les raretés (badges de couleur en grille 2×3) et les règles, avec un bouton « Compris ! ».
+
+Déroulé à l'écran (thème sombre, fond presque noir, accent vert)
+
+Écran d'accueil : titre « Ouvrir un paquet », sous-titre « Découvrez 5 nouvelles cartes Wikipédia », un paquet façon sachet blanc avec des pièces de puzzle en pastel et le logo au centre. Le paquet a un halo doré/orangé. Dessous : un bouton texte vert « Ouvrir », puis le compteur.
+Au clic : le bouton devient « Ouverture… » et le paquet tremble (pack-shake, 0,5 s : rotation -3°, +3°, -2°, +2°, 0).
+Révélation carte par carte :
+en haut, « Carte 1 / 5 » ;
+la carte mesure 288×420 px, avec des coins arrondis (rounded-2xl) ;
+la moitié haute montre l'image, la moitié basse est teintée de la couleur de la rareté, avec le titre en gras et le résumé ;
+en haut à gauche, le badge de rareté ; en haut à droite, une étoile pour mettre en favori ;
+en bas, les stats ATK et DEF.
+Animation d'entrée card-flip (0,6 s, ease-out) : on passe de perspective(800px) rotateY(90deg), opacité 0, à rotateY(0), opacité 1. En revenant en arrière, c'est card-flip-back (-90°).
+Inclinaison 3D : la carte suit la souris ou le toucher (transform matrix3d en perspective). Le curseur est une main (cursor-grab), et on peut faire glisser la carte pour passer à la suivante.
+Halo selon la rareté : un box-shadow qui devient plus fort à chaque rareté, par exemple .glow-c { 0 0 6px rgba(184,242,213,.22), 0 0 10px rgba(...,.14) } et jusqu'à .glow-l { 0 0 16px rgba(255,225,68,.36), 0 0 28px rgba(250,153,49,.2) }.
+Navigation : des flèches précédent/suivant, 5 points de progression, et un bouton vert « Encore N cartes » (N diminue à chaque carte). À la dernière carte, il devient « Continuer », qui ramène à l'écran d'accueil avec le compteur mis à jour.
+
+Effets pour les cartes rares, repérés dans le CSS
+
+Je n'en ai pas tiré pendant mon ouverture, donc je ne les ai pas vus en action.
+
+card-flip-legendary : perspective(1100px) rotateY(92deg) scale(.9) qui arrive à rotateY(0) scale(1).
+Un feu d'artifice : un flash sur tout l'écran (opacité de 0,55 à 0 en 1,35 s), puis des particules, des étincelles et des traînées. Chaque élément part du centre avec un angle et une distance donnés par des variables CSS (--crfs-angle, --crfs-dist, --crfs-delay), en 1,45 s avec cubic-bezier(.1,.5,.15,1), et rétrécit jusqu'à disparaître.
+legendary-shimmer-slide : une bande brillante qui glisse de 0 à -50 %.
+Effet holographique (« shiny ») : shiny-drift déplace le point de reflet via les variables --shiny-ix et --shiny-iy, et shiny-reveal-sweep fait passer un reflet sur la carte (background-position de 120 % à -20 %).
+pulse-glow : l'opacité oscille entre 0,6 et 1 en 2 s, en boucle.
+
+Stack observée : Tailwind v4, classes utilitaires et animations animate-* personnalisées, animate-fade-in-up à l'arrivée sur la page.
+
+Mon paquet contenait 3 C et 2 PC : Woolridge, Les Enfants du bunker, HMS M4, Notre-Dame-des-Hirondelles et The Unthinkable. C'est pour ça que je n'ai pas vu les effets des cartes rares. Je n'ai pas non plus pu voir l'appel à l'API d'ouverture, parce que je n'ai commencé à écouter le réseau qu'après avoir ouvert le paquet.
+
+Si tu veux, j'en ouvre un deuxième pour relever la structure de cette requête.

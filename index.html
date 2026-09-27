@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Game Masters — POC Booster</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="home">
+    <h1>Ouvrir un paquet</h1>
+    <p class="subtitle">Découvrez 5 nouvelles cartes de jeux vidéo</p>
+
+    <div id="pack" class="pack">
+      <div class="pack-logo">VGM</div>
+    </div>
+
+    <button id="open-btn" class="btn-open">Ouvrir</button>
+
+    <p id="counter" class="counter">Chargement…</p>
+    <p id="regen" class="regen"></p>
+
+    <button id="how-link" class="link-btn">Comment ça marche ?</button>
+  </div>
+
+  <div id="reveal" class="reveal hidden">
+    <p id="card-counter" class="card-counter">Carte 1 / 5</p>
+
+    <div id="card-stage" class="card-stage">
+      <div id="card" class="card">
+        <div class="card-face-top"></div>
+        <div class="card-face-bottom">
+          <div class="card-title"></div>
+          <div class="card-platforms"></div>
+          <div class="card-popularity"></div>
+          <div class="card-summary"></div>
+        </div>
+        <div class="card-badge"></div>
+        <button class="card-fav" title="Favori">★</button>
+        <div class="card-stats">
+          <span class="stat atk"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="#ff4d4d" d="M6.92 2.5l3.5 3.5-1.5 1.5-1-1-2 2 1 1-1.5 1.5-3.5-3.5 1.5-1.5 1 1 2-2-1-1z"/><path fill="#ff4d4d" d="M14.5 10.08l7.42 7.42-3.42 3.42-7.42-7.42 1.5-1.5-6-6L8.08 4.5l6 6z"/></svg><span class="stat-val atk-val">0</span></span>
+          <span class="stat def"><svg viewBox="0 0 24 24" width="14" height="14"><path fill="#4da3ff" d="M12 2l7 3v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V5z"/></svg><span class="stat-val def-val">0</span></span>
+        </div>
+        <div class="holo"></div>
+        <div class="shimmer"></div>
+      </div>
+      <div id="fireworks" class="fireworks"></div>
+    </div>
+
+    <div class="dots" id="dots"></div>
+
+    <div class="nav-arrows">
+      <button id="prev-btn" class="arrow-btn">‹</button>
+      <button id="next-btn" class="arrow-btn">›</button>
+    </div>
+
+    <button id="continue-btn" class="btn-open">Encore 4 cartes</button>
+  </div>
+
+  <div id="how-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Comment ça marche ?</h2>
+      <div class="rarity-grid">
+        <div class="rarity-cell" style="--c:#b8f2d5">C<br /><small>Commune</small></div>
+        <div class="rarity-cell" style="--c:#b1cff2">PC<br /><small>Peu commune</small></div>
+        <div class="rarity-cell" style="--c:#c6a7f2">R<br /><small>Rare</small></div>
+        <div class="rarity-cell" style="--c:#ed6fa3">SR<br /><small>Super rare</small></div>
+        <div class="rarity-cell" style="--c:#fa9931">UR<br /><small>Ultra rare</small></div>
+        <div class="rarity-cell" style="--c:#ffe144">L<br /><small>Légendaire</small></div>
+      </div>
+      <p>La rareté dépend de la popularité réelle du jeu sur RAWG (nombre de joueurs qui l'ont ajouté à leur liste). Plus un jeu est ajouté par la communauté, plus sa carte est rare.</p>
+      <p>Un paquet contient 5 cartes, triées par rareté croissante : la meilleure carte arrive en dernier. Tu peux stocker jusqu'à 10 paquets, un nouveau se régénère toutes les 10 minutes.</p>
+      <button id="how-close" class="btn-open">Compris !</button>
+    </div>
+  </div>
+
+  <footer>
+    Données jeux vidéo fournies par <a href="https://rawg.io" target="_blank" rel="noopener">RAWG.io</a>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
