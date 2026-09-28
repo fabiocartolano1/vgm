@@ -2,7 +2,10 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#060706" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Video Game Masters — POC Booster</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -50,8 +53,8 @@
     <div class="dots" id="dots"></div>
 
     <div class="nav-arrows">
-      <button id="prev-btn" class="arrow-btn">‹</button>
-      <button id="next-btn" class="arrow-btn">›</button>
+      <button id="prev-btn" class="arrow-btn" aria-label="Carte précédente">‹</button>
+      <button id="next-btn" class="arrow-btn" aria-label="Carte suivante">›</button>
     </div>
 
     <button id="continue-btn" class="btn-open">Encore 4 cartes</button>
@@ -61,12 +64,12 @@
     <div class="modal-content">
       <h2>Comment ça marche ?</h2>
       <div class="rarity-grid">
-        <div class="rarity-cell" style="--c:#b8f2d5">C<br /><small>Commune · 57,5 %</small></div>
-        <div class="rarity-cell" style="--c:#b1cff2">PC<br /><small>Peu commune · 15 %</small></div>
-        <div class="rarity-cell" style="--c:#c6a7f2">R<br /><small>Rare · 14 %</small></div>
-        <div class="rarity-cell" style="--c:#ed6fa3">SR<br /><small>Super rare · 8 %</small></div>
-        <div class="rarity-cell" style="--c:#fa9931">UR<br /><small>Ultra rare · 4 %</small></div>
-        <div class="rarity-cell" style="--c:#ffe144">L<br /><small>Légendaire · 1,5 %</small></div>
+        <div class="rarity-cell" style="--c:#b8f2d5">C<br /><small>Commune<br />57,5 %</small></div>
+        <div class="rarity-cell" style="--c:#b1cff2">PC<br /><small>Peu commune<br />15 %</small></div>
+        <div class="rarity-cell" style="--c:#c6a7f2">R<br /><small>Rare<br />14 %</small></div>
+        <div class="rarity-cell" style="--c:#ed6fa3">SR<br /><small>Super rare<br />8 %</small></div>
+        <div class="rarity-cell" style="--c:#fa9931">UR<br /><small>Ultra rare<br />4 %</small></div>
+        <div class="rarity-cell" style="--c:#ffe144">L<br /><small>Légendaire<br />1,5 %</small></div>
       </div>
       <p>La rareté dépend de la popularité réelle du jeu sur RAWG (nombre de joueurs qui l'ont ajouté à leur liste). Plus un jeu est ajouté par la communauté, plus sa carte est rare.</p>
       <p>Les pourcentages indiquent la chance que la meilleure carte d'un paquet soit de cette rareté.</p>
