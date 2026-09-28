@@ -28,12 +28,14 @@ const CARDS_PER_PACK = 5;
 
 // Rareté = rang du jeu dans le classement mondial RAWG par nombre de joueurs
 // l'ayant ajouté ("added") : Légendaire = top 50, Ultra rare = top 300,
-// Super rare = top 800, Rare = top 2 000, Peu commune = top 10 000.
+// Super rare = top 800, Rare = top 2 000, Commune = jusqu'au top 15 000.
+// Les jeux au-delà du top 15 000 ne sont jamais tirés.
 // min = nombre de joueurs correspondant (voir TIER_RANKS).
 // packOdds = chance que la MEILLEURE carte du paquet soit de cette rareté.
 const RARITIES = [
-  { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0,    packOdds: 0.575 },
-  { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 174,  packOdds: 0.15 },
+  // 0.725 = ancien Commune (0.575) + ancien Peu commune (0.15), fusionnés :
+  // les chances des raretés au-dessus sont inchangées.
+  { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0,    packOdds: 0.725 },
   { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 1242, packOdds: 0.14 },
   { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 2688, packOdds: 0.08 },
   { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 5496, packOdds: 0.04 },
@@ -41,6 +43,9 @@ const RARITIES = [
 ];
 const RARITY_BY_KEY = Object.fromEntries(RARITIES.map((r) => [r.key, r]));
 const RARITY_ORDER = Object.fromEntries(RARITIES.map((r, i) => [r.key, i]));
+// Cartes obtenues quand "Peu commune" existait : affichées comme Commune.
+RARITY_BY_KEY.pc = RARITY_BY_KEY.c;
+RARITY_ORDER.pc = RARITY_ORDER.c;
 
 // Plus rare en premier ; à rareté égale, garde l'ordre d'arrivée (tri stable
 // sur des cartes déjà triées par packedAt desc).
@@ -94,29 +99,29 @@ const GUARANTEED_TIER = RARITIES.findIndex((r) => r.key === "r");
 // 2026-09-28 par scripts/compute-tiers.mjs (workflow "Calculer les tranches
 // de rareté") : les seuils sont le nombre de joueurs du jeu classé 10 000e,
 // 2 000e, 800e, 300e et 50e toutes consoles autorisées confondues.
-// Format : [accessibles, >=174 (PC), >=1242 (R), >=2688 (SR), >=5496 (UR), >=10514 (L)]
+// Format : [accessibles, >=1242 (R), >=2688 (SR), >=5496 (UR), >=10514 (L)]
 const TIER_RANKS = {
-  4:   [10000, 9229, 1912, 779, 293, 50],
-  27:  [1677, 144, 32, 9, 2, 0],
-  15:  [3106, 326, 67, 27, 11, 2],
-  16:  [2797, 1030, 408, 228, 101, 18],
-  18:  [6199, 2450, 927, 445, 194, 35],
-  187: [1383, 535, 159, 64, 32, 8],
-  80:  [865, 183, 56, 33, 12, 2],
-  14:  [2543, 991, 410, 239, 105, 22],
-  1:   [4999, 2244, 922, 460, 199, 35],
-  186: [1142, 514, 152, 59, 26, 6],
-  7:   [5383, 1749, 567, 240, 99, 17],
-  9:   [2446, 140, 28, 13, 3, 0],
-  8:   [1609, 171, 42, 17, 5, 1],
-  19:  [1355, 406, 126, 53, 25, 6],
-  17:  [1384, 130, 21, 5, 0, 0],
-  10:  [1040, 253, 73, 34, 14, 1],
-  11:  [2174, 284, 52, 19, 4, 0],
-  105: [662, 109, 25, 11, 2, 0],
-  83:  [358, 48, 9, 3, 1, 0],
-  43:  [421, 28, 5, 1, 0, 0],
-  24:  [929, 104, 12, 2, 0, 0],
+  4:   [10000, 1912, 779, 293, 50],
+  27:  [1677, 32, 9, 2, 0],
+  15:  [3106, 67, 27, 11, 2],
+  16:  [2797, 408, 228, 101, 18],
+  18:  [6199, 927, 445, 194, 35],
+  187: [1383, 159, 64, 32, 8],
+  80:  [865, 56, 33, 12, 2],
+  14:  [2543, 410, 239, 105, 22],
+  1:   [4999, 922, 460, 199, 35],
+  186: [1142, 152, 59, 26, 6],
+  7:   [5383, 567, 240, 99, 17],
+  9:   [2446, 28, 13, 3, 0],
+  8:   [1609, 42, 17, 5, 1],
+  19:  [1355, 126, 53, 25, 6],
+  17:  [1384, 21, 5, 0, 0],
+  10:  [1040, 73, 34, 14, 1],
+  11:  [2174, 52, 19, 4, 0],
+  105: [662, 25, 11, 2, 0],
+  83:  [358, 9, 3, 1, 0],
+  43:  [421, 5, 1, 0, 0],
+  24:  [929, 12, 2, 0, 0],
 };
 
 // Filet de sécurité : si RAWG a retiré des jeux depuis le calcul, un rang
@@ -125,6 +130,8 @@ const TIER_RANKS = {
 const platformAccessible = {};
 
 // Plage de rangs [start, end) de la rareté d'index i sur une console.
+// TIER_RANKS[p] = [fin de Commune, fin de R, fin de SR, fin de UR, fin de L]
+// (chaque valeur = nombre de jeux de la console au-dessus du seuil).
 function tierRange(platformId, i) {
   const t = TIER_RANKS[platformId];
   const cap = Math.min(t[0], platformAccessible[platformId] ?? Infinity);
