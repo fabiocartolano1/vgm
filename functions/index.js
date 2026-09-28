@@ -27,7 +27,11 @@ function buildRawgUrl(path, query, key) {
   return `${RAWG_BASE}${path}?${params.toString()}`;
 }
 
-exports.rawgProxy = onCall({ secrets: [RAWG_API_KEY], region: "us-central1" }, async (request) => {
+// invoker "public" : l'appel HTTP doit pouvoir atteindre la fonction depuis
+// n'importe quel navigateur ; la vraie vérification d'identité se fait juste
+// en dessous via request.auth (jeton Firebase). Explicite pour que chaque
+// déploiement réapplique ce droit (un déploiement raté l'avait laissé absent).
+exports.rawgProxy = onCall({ secrets: [RAWG_API_KEY], region: "us-central1", invoker: "public" }, async (request) => {
   // Le proxy consomme le quota RAWG du projet : réservé aux comptes connectés
   // (voir aussi firestore.rules, même logique côté base de données).
   if (!request.auth) {
