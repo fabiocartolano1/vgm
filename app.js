@@ -286,6 +286,21 @@ async function fetchGameDetail(id) {
   return res.json();
 }
 
+// Les images RAWG (media.rawg.io) sont souvent en pleine résolution (plusieurs
+// centaines de Ko à quelques Mo) : sur mobile, en charger plusieurs dizaines
+// d'un coup (paquet, collection) est ce qui rend l'app lente à charger. Le CDN
+// de RAWG accepte un redimensionnement à la volée via un segment /resize/<w>/-/
+// dans l'URL (utilisé par rawg.io lui-même pour ses vignettes) : on l'utilise
+// à l'affichage, sans toucher à l'URL d'origine stockée sur la carte/Firestore.
+// Si l'URL n'a pas la forme attendue, on retombe simplement sur l'originale.
+function rawgThumbnail(url, width) {
+  if (!url) return url;
+  const m = /^https:\/\/media\.rawg\.io\/media\/(games\/.*)$/.exec(url);
+  return m ? `https://media.rawg.io/media/resize/${width}/-/${m[1]}` : url;
+}
+const REVEAL_IMAGE_WIDTH = 640;
+const MINI_CARD_IMAGE_WIDTH = 300;
+
 function truncate(text, max) {
   if (!text) return "Pas de description disponible.";
   const clean = text.replace(/\s+/g, " ").trim();
@@ -396,7 +411,7 @@ async function drawPack() {
 
   await Promise.all(
     cards.map(async (card) => {
-      card.imageReady = await preloadImage(card.image);
+      card.imageReady = await preloadImage(rawgThumbnail(card.image, REVEAL_IMAGE_WIDTH));
     })
   );
 
@@ -510,7 +525,22 @@ function buildGenreFilters(cards) {
   }
 }
 
-function buildMiniCard(card) {
+// Charge l'image d'une mini-carte seulement quand elle approche de l'écran :
+// avec des dizaines de cartes dans la collection, tout charger d'un coup en
+// pleine résolution est ce qui rendait l'onglet très lent sur mobile.
+function handleMiniCardIntersect(entries, observer) {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    // On observe le conteneur (.mini-card-img), pas l'<img> : celle-ci est en
+    // display:none tant qu'elle n'a pas chargé (voir CSS "no-image"), donc
+    // sans box elle n'entre jamais en intersection.
+    const img = entry.target.querySelector("img");
+    if (img && img.dataset.src) img.src = img.dataset.src;
+    observer.unobserve(entry.target);
+  }
+}
+
+function buildMiniCard(card, imgObserver) {
   const rarity = RARITY_BY_KEY[card.rarityKey];
   const el = document.createElement("div");
   el.className = "mini-card";
@@ -533,7 +563,13 @@ function buildMiniCard(card) {
     img.alt = "";
     img.addEventListener("load", () => imgWrap.classList.remove("no-image"));
     img.addEventListener("error", () => img.remove());
-    img.src = card.image;
+    const thumb = rawgThumbnail(card.image, MINI_CARD_IMAGE_WIDTH);
+    if (imgObserver) {
+      img.dataset.src = thumb;
+      imgObserver.observe(imgWrap);
+    } else {
+      img.src = thumb; // pas d'IntersectionObserver disponible -> chargement immédiat
+    }
     imgWrap.appendChild(img);
   }
   el.appendChild(imgWrap);
@@ -573,7 +609,10 @@ function renderCollection() {
 
   collectionStatusEl.classList.add("hidden");
   collectionGridEl.innerHTML = "";
-  for (const card of filtered) collectionGridEl.appendChild(buildMiniCard(card));
+  const imgObserver = window.IntersectionObserver
+    ? new IntersectionObserver(handleMiniCardIntersect, { rootMargin: "400px 0px" })
+    : null;
+  for (const card of filtered) collectionGridEl.appendChild(buildMiniCard(card, imgObserver));
 }
 
 // ---------- Reveal UI ----------
@@ -624,8 +663,8 @@ function spawnFireworks() {
 // Image préchargée à l'ouverture du paquet -> affichée tout de suite.
 // Sinon (pas d'image, erreur, trop lente) logo, puis l'image si elle finit par arriver.
 function setCardImage(card) {
-  const src = card.image;
   const top = cardEl.querySelector(".card-face-top");
+  const src = rawgThumbnail(card.image, REVEAL_IMAGE_WIDTH);
   if (card.imageReady) {
     top.style.backgroundImage = `url('${src}')`;
     top.classList.remove("no-image");
@@ -633,10 +672,10 @@ function setCardImage(card) {
   }
   top.style.backgroundImage = "none";
   top.classList.add("no-image");
-  if (!src) return;
+  if (!card.image) return;
   const img = new Image();
   img.onload = () => {
-    if (currentCards[currentIndex]?.image !== src) return;
+    if (currentCards[currentIndex] !== card) return; // la carte affichée a changé entre-temps
     top.style.backgroundImage = `url('${src}')`;
     top.classList.remove("no-image");
   };
