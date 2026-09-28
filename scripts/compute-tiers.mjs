@@ -21,8 +21,8 @@ const GLOBAL_RANKS = [15000, 2000, 800, 300, 50];
 const MAX_ACCESSIBLE = 10000; // RAWG ne pagine pas au-delà
 
 let calls = 0;
-async function page(platforms, n, size = 1) {
-  const url = `${BASE}?key=${KEY}&page_size=${size}&page=${n}&platforms=${platforms}&ordering=-added&exclude_additions=true`;
+async function page(platforms, n, size = 1, dates = "") {
+  const url = `${BASE}?key=${KEY}&page_size=${size}&page=${n}&platforms=${platforms}&ordering=-added&exclude_additions=true${dates ? `&dates=${dates}` : ""}`;
   for (let attempt = 0; attempt < 4; attempt++) {
     calls++;
     const res = await fetch(url);
@@ -34,10 +34,33 @@ async function page(platforms, n, size = 1) {
 }
 
 async function addedAt(platforms, rank) {
-  // Pages de 40 (le max RAWG) pour atteindre les rangs au-delà de 10 000.
-  const size = rank > MAX_ACCESSIBLE ? 40 : 1;
-  const data = await page(platforms, Math.ceil(rank / size), size);
-  return data?.results?.[(rank - 1) % size]?.added ?? null;
+  const data = await page(platforms, rank);
+  return data?.results?.[0]?.added ?? null;
+}
+
+// RAWG ne pagine pas au-delà du 10 000e résultat : pour un rang mondial plus
+// loin, on découpe le catalogue par année de sortie (partition sans doublon,
+// chaque année reste sous la limite), on récupère les "added" de chaque année
+// jusqu'à passer sous FLOOR, puis on fusionne et on lit la valeur au rang voulu.
+const FLOOR = 50;
+async function addedAtBeyondCap(platforms, rank) {
+  const values = [];
+  const lastYear = new Date().getUTCFullYear() + 1;
+  for (let y = 1970; y <= lastYear; y++) {
+    for (let n = 1; ; n++) {
+      const data = await page(platforms, n, 40, `${y}-01-01,${y}-12-31`);
+      const res = data?.results ?? [];
+      for (const g of res) values.push(g.added);
+      const last = res[res.length - 1];
+      if (res.length < 40 || last.added < FLOOR) break;
+      if (n * 40 >= MAX_ACCESSIBLE) throw new Error(`Année ${y} : plus de 10 000 jeux au-dessus de ${FLOOR}`);
+    }
+  }
+  values.sort((a, b) => b - a);
+  const above = values.filter((v) => v >= FLOOR).length;
+  if (above < rank) throw new Error(`Seulement ${above} jeux au-dessus de ${FLOOR} : baisser FLOOR`);
+  console.log(`Rang ${rank} via découpage par année : ${values.length} jeux lus, ${above} au-dessus de ${FLOOR}`);
+  return values[rank - 1];
 }
 
 // Nombre de jeux (rangs 1..n) ayant added >= threshold.
@@ -54,7 +77,9 @@ async function countAtLeast(platforms, n, threshold) {
 
 const all = PLATFORMS.join(",");
 const thresholds = [];
-for (const rank of GLOBAL_RANKS) thresholds.push(await addedAt(all, rank));
+for (const rank of GLOBAL_RANKS) {
+  thresholds.push(rank > MAX_ACCESSIBLE ? await addedAtBeyondCap(all, rank) : await addedAt(all, rank));
+}
 console.log("Seuils (added) aux rangs mondiaux", GLOBAL_RANKS, "=>", thresholds);
 if (thresholds.includes(null)) throw new Error("Rang mondial inaccessible chez RAWG");
 
