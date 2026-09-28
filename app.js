@@ -197,7 +197,11 @@ function rollTierIndex() {
 
 // Console au hasard (chance égale) parmi celles qui ont des jeux de cette rareté,
 // puis un jeu au hasard dans la tranche du classement correspondante.
-async function drawOneGame(tierIndex) {
+// Les DLC / extensions sont exclus : exclude_additions côté liste, et
+// parents_count côté détail en filet de sécurité (un DLC a un jeu parent).
+const MAX_DRAW_ATTEMPTS = 5;
+
+async function drawOneGameAttempt(tierIndex) {
   const eligible = ALLOWED_PLATFORMS.filter((p) => {
     const [start, end] = tierRange(p, tierIndex);
     return end > start;
@@ -205,18 +209,33 @@ async function drawOneGame(tierIndex) {
   const platformId = eligible[Math.floor(Math.random() * eligible.length)];
   const [start, end] = tierRange(platformId, tierIndex);
   const rank = start + Math.floor(Math.random() * (end - start));
-  const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${rank + 1}&platforms=${platformId}&ordering=-added`;
+  const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${rank + 1}&platforms=${platformId}&ordering=-added&exclude_additions=true`;
   const res = await fetch(url);
+  // TIER_RANKS a été calculé DLC compris : un rang en fin de liste peut
+  // désormais dépasser la dernière page (404) -> on retente.
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error("RAWG error " + res.status);
   const data = await res.json();
-  return (data.results || [])[0];
+  const game = (data.results || [])[0];
+  if (!game) return null;
+  const detail = await fetchGameDetail(game.id);
+  if (detail && detail.parents_count > 0) return null;
+  return { game, detail };
+}
+
+async function drawOneGame(tierIndex) {
+  for (let i = 0; i < MAX_DRAW_ATTEMPTS; i++) {
+    const drawn = await drawOneGameAttempt(tierIndex);
+    if (drawn) return drawn;
+  }
+  return null;
 }
 
 async function drawPack() {
   const tiers = Array.from({ length: CARDS_PER_PACK }, rollTierIndex);
-  const games = (await Promise.all(tiers.map(drawOneGame))).filter(Boolean);
-
-  const details = await Promise.all(games.map((g) => fetchGameDetail(g.id)));
+  const drawn = (await Promise.all(tiers.map(drawOneGame))).filter(Boolean);
+  const games = drawn.map((d) => d.game);
+  const details = drawn.map((d) => d.detail);
 
   const cards = games.map((g, i) => {
     const detail = details[i] || g;
