@@ -27,17 +27,17 @@ const ALLOWED_PLATFORMS_PARAM = ALLOWED_PLATFORMS.join(",");
 const CARDS_PER_PACK = 5;
 
 // Rareté = rang du jeu dans le classement mondial RAWG par nombre de joueurs
-// l'ayant ajouté ("added") : Légendaire = top 100, Ultra rare = top 400,
-// Super rare = top 1 500, Rare = top 5 000, Peu commune = top 10 000.
+// l'ayant ajouté ("added") : Légendaire = top 50, Ultra rare = top 300,
+// Super rare = top 800, Rare = top 2 000, Peu commune = top 10 000.
 // min = nombre de joueurs correspondant (voir TIER_RANKS).
 // packOdds = chance que la MEILLEURE carte du paquet soit de cette rareté.
 const RARITIES = [
   { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0,    packOdds: 0.575 },
   { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 174,  packOdds: 0.15 },
-  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 460,  packOdds: 0.14 },
-  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 1636, packOdds: 0.08 },
-  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 4567, packOdds: 0.04 },
-  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 8566, packOdds: 0.015 },
+  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 1242, packOdds: 0.14 },
+  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 2688, packOdds: 0.08 },
+  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 5496, packOdds: 0.04 },
+  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 10514, packOdds: 0.015 },
 ];
 const RARITY_BY_KEY = Object.fromEntries(RARITIES.map((r) => [r.key, r]));
 const RARITY_ORDER = Object.fromEntries(RARITIES.map((r, i) => [r.key, i]));
@@ -93,30 +93,30 @@ const GUARANTEED_TIER = RARITIES.findIndex((r) => r.key === "r");
 // plafonnée à 10 000) au-dessus de chaque seuil de rareté. Calculé le
 // 2026-09-28 par scripts/compute-tiers.mjs (workflow "Calculer les tranches
 // de rareté") : les seuils sont le nombre de joueurs du jeu classé 10 000e,
-// 5 000e, 1 500e, 400e et 100e toutes consoles autorisées confondues.
-// Format : [accessibles, >=174 (PC), >=460 (R), >=1636 (SR), >=4567 (UR), >=8566 (L)]
+// 2 000e, 800e, 300e et 50e toutes consoles autorisées confondues.
+// Format : [accessibles, >=174 (PC), >=1242 (R), >=2688 (SR), >=5496 (UR), >=10514 (L)]
 const TIER_RANKS = {
-  4:   [10000, 9229, 4693, 1440, 390, 99],
-  27:  [1677, 144, 69, 25, 3, 0],
-  15:  [3106, 326, 161, 58, 14, 3],
-  16:  [2797, 1030, 703, 348, 138, 33],
-  18:  [6199, 2450, 1677, 744, 246, 69],
-  187: [1383, 535, 318, 122, 41, 12],
-  80:  [865, 183, 106, 51, 16, 4],
-  14:  [2543, 991, 680, 351, 145, 40],
-  1:   [4999, 2244, 1585, 747, 253, 70],
-  186: [1142, 514, 305, 114, 36, 10],
-  7:   [5383, 1749, 1127, 438, 133, 33],
-  9:   [2446, 140, 81, 23, 7, 0],
-  8:   [1609, 171, 94, 34, 5, 2],
-  19:  [1355, 406, 249, 99, 33, 11],
-  17:  [1384, 130, 67, 16, 1, 0],
-  10:  [1040, 253, 153, 57, 18, 4],
-  11:  [2174, 284, 137, 38, 8, 0],
-  105: [662, 109, 58, 21, 3, 0],
-  83:  [358, 48, 24, 4, 1, 0],
-  43:  [421, 28, 15, 4, 0, 0],
-  24:  [929, 104, 41, 7, 1, 0],
+  4:   [10000, 9229, 1912, 779, 293, 50],
+  27:  [1677, 144, 32, 9, 2, 0],
+  15:  [3106, 326, 67, 27, 11, 2],
+  16:  [2797, 1030, 408, 228, 101, 18],
+  18:  [6199, 2450, 927, 445, 194, 35],
+  187: [1383, 535, 159, 64, 32, 8],
+  80:  [865, 183, 56, 33, 12, 2],
+  14:  [2543, 991, 410, 239, 105, 22],
+  1:   [4999, 2244, 922, 460, 199, 35],
+  186: [1142, 514, 152, 59, 26, 6],
+  7:   [5383, 1749, 567, 240, 99, 17],
+  9:   [2446, 140, 28, 13, 3, 0],
+  8:   [1609, 171, 42, 17, 5, 1],
+  19:  [1355, 406, 126, 53, 25, 6],
+  17:  [1384, 130, 21, 5, 0, 0],
+  10:  [1040, 253, 73, 34, 14, 1],
+  11:  [2174, 284, 52, 19, 4, 0],
+  105: [662, 109, 25, 11, 2, 0],
+  83:  [358, 48, 9, 3, 1, 0],
+  43:  [421, 28, 5, 1, 0, 0],
+  24:  [929, 104, 12, 2, 0, 0],
 };
 
 // Filet de sécurité : si RAWG a retiré des jeux depuis le calcul, un rang
