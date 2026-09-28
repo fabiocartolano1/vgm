@@ -399,11 +399,14 @@ function rollTierIndex() {
   return 0;
 }
 
-// Console au hasard (chance égale) parmi celles qui ont des jeux de cette rareté,
-// puis un jeu au hasard dans la tranche du classement correspondante.
-// Les DLC / extensions sont exclus : exclude_additions côté liste, et
-// parents_count côté détail en filet de sécurité (un DLC a un jeu parent).
+// Un jeu au hasard dans la tranche du classement correspondant à la rareté.
+// Les DLC / extensions sont exclus : exclude_additions côté liste,
+// parents_count côté détail (un DLC déclaré a un jeu parent), et un filtre
+// sur le nom pour ceux que RAWG référence comme des jeux à part entière
+// sans les rattacher à leur jeu (ex. "Modern Warfare 2 - Resurgence Pack").
 const MAX_DRAW_ATTEMPTS = 5;
+const NOT_A_GAME_NAME =
+  /\b(dlc|packs?|season pass|expansion pass|add-?ons?|soundtrack|ost|costumes?|skins?|demo|beta|playtest|test server)\b/i;
 
 async function drawOneGameAttempt(tierIndex) {
   // Tirage uniforme sur l'ensemble des (console, rang) de la tranche : une
@@ -438,6 +441,7 @@ async function drawOneGameAttempt(tierIndex) {
   if (status !== 200) throw new Error("RAWG error " + status);
   const game = (data.results || [])[0];
   if (!game) return null;
+  if (NOT_A_GAME_NAME.test(game.name)) return null;
   const detail = await fetchGameDetail(game.id);
   if (detail && detail.parents_count > 0) return null;
   return { game, detail };
