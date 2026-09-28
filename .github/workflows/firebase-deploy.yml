@@ -41,7 +41,10 @@ jobs:
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
           export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
           npm --prefix functions ci
-          npx firebase-tools@latest deploy --only functions:rawgProxy --project video-game-masters --non-interactive || \
+          # --force : met aussi en place une politique de nettoyage des vieilles
+          # images Docker dans Artifact Registry (sinon le déploiement réussit
+          # quand même mais remonte une erreur non bloquante à ce sujet).
+          npx firebase-tools@latest deploy --only functions:rawgProxy --project video-game-masters --non-interactive --force || \
             echo "::warning::Cloud Function non déployée (plan Blaze, secret RAWG_API_KEY, ou droits IAM à vérifier)."
           rm -f /tmp/firebase-sa.json
 
