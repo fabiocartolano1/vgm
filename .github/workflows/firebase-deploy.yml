@@ -14,17 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # config.js est gitignoré : on le génère à partir du secret RAWG_API_KEY.
-      - name: Générer config.js
-        env:
-          RAWG_API_KEY: ${{ secrets.RAWG_API_KEY }}
-        run: |
-          if [ -z "$RAWG_API_KEY" ]; then
-            echo "::error::Secret RAWG_API_KEY manquant"
-            exit 1
-          fi
-          printf 'const RAWG_API_KEY = "%s";\n' "$RAWG_API_KEY" > config.js
-
       # Règles Firestore (firestore.rules) : l'action hosting ci-dessous ne
       # déploie que le site, pas les règles. Ne bloque pas le déploiement du
       # site si la base Firestore n'a pas encore été créée dans la console
@@ -38,6 +27,22 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
           npx firebase-tools@latest deploy --only firestore:rules --project video-game-masters --non-interactive || \
             echo "::warning::Règles Firestore non déployées (la base Firestore doit être créée une fois dans la console Firebase)."
+          rm -f /tmp/firebase-sa.json
+
+      # Cloud Function rawgProxy : cache la clé RAWG côté serveur. Ne bloque
+      # pas le déploiement du site si ça échoue (plan Blaze pas encore actif,
+      # secret RAWG_API_KEY pas encore créé dans Secret Manager, ou droits du
+      # compte de service insuffisants pour Cloud Functions).
+      - name: Déployer la Cloud Function rawgProxy
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+          npm --prefix functions ci
+          npx firebase-tools@latest deploy --only functions:rawgProxy --project video-game-masters --non-interactive || \
+            echo "::warning::Cloud Function non déployée (plan Blaze, secret RAWG_API_KEY, ou droits IAM à vérifier)."
           rm -f /tmp/firebase-sa.json
 
       - name: Déployer en production

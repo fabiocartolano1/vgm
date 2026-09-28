@@ -1,5 +1,3 @@
-const RAWG_BASE = "https://api.rawg.io/api/games";
-
 // Consoles autorisées (voir consoles.txt) -> IDs plateformes RAWG.
 const ALLOWED_PLATFORMS = [
   4,   // PC
@@ -137,11 +135,14 @@ function tierRange(platformId, i) {
 // "count" de RAWG, et met à jour le plafond pour tous les tirages suivants.
 async function learnAccessibleCount(platformId) {
   try {
-    const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=1&platforms=${platformId}&ordering=-added&exclude_additions=true`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (typeof data.count === "number") platformAccessible[platformId] = data.count;
+    const { status, body } = await callRawg("", {
+      page_size: 1,
+      page: 1,
+      platforms: platformId,
+      ordering: "-added",
+      exclude_additions: true,
+    });
+    if (status === 200 && typeof body.count === "number") platformAccessible[platformId] = body.count;
   } catch (e) {
     console.error("Comptage RAWG impossible pour la plateforme " + platformId, e);
   }
@@ -192,7 +193,11 @@ const prevBtn = document.getElementById("prev-btn");
 const nextBtn = document.getElementById("next-btn");
 const continueBtn = document.getElementById("continue-btn");
 
-const userSelectEl = document.getElementById("user-select");
+const signinBtn = document.getElementById("signin-btn");
+const accountSignedInEl = document.getElementById("account-signed-in");
+const accountAvatarEl = document.getElementById("account-avatar");
+const accountNameEl = document.getElementById("account-name");
+const signoutBtn = document.getElementById("signout-btn");
 const tabPackBtn = document.getElementById("tab-pack-btn");
 const tabCollectionBtn = document.getElementById("tab-collection-btn");
 const tabPackEl = document.getElementById("tab-pack");
@@ -203,21 +208,53 @@ const collectionStatusEl = document.getElementById("collection-status");
 const collectionGridEl = document.getElementById("collection-grid");
 const toastEl = document.getElementById("toast");
 
-// ---------- Utilisateur (POC : pas d'authentification, juste une étiquette
-// choisie dans le menu et gardée sur cet appareil pour ne pas la redemander) ----------
+// ---------- Utilisateur (vraie identité via Firebase Auth / Google) ----------
+// currentUser est l'UID Firebase du compte connecté (vérifié côté serveur par
+// Firestore via request.auth.uid, voir firestore.rules) : contrairement à
+// l'ancien menu déroulant, personne ne peut écrire dans la collection d'un
+// autre en se contentant de choisir son nom.
 
-const USERS = ["fabio", "raph", "thibaut", "zaven"];
+let currentUser = null;
 
-let currentUser = localStorage.getItem("vgm_user") || "";
-if (!USERS.includes(currentUser)) currentUser = "";
-userSelectEl.value = currentUser;
-
-userSelectEl.addEventListener("change", () => {
-  currentUser = userSelectEl.value;
-  localStorage.setItem("vgm_user", currentUser);
-  renderHome();
-  if (activeTab === "collection") loadCollection();
+// Sur mobile (Safari iOS notamment), les popups d'auth sont peu fiables ->
+// on utilise la redirection : signInWithRedirect envoie sur la page Google,
+// puis getRedirectResult() récupère le résultat au retour sur l'app.
+signinBtn.addEventListener("click", () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithRedirect(provider).catch((e) => {
+    console.error("Connexion impossible", e);
+    showToast("Connexion impossible. Réessaie.");
+  });
 });
+
+signoutBtn.addEventListener("click", () => {
+  auth.signOut().catch((e) => console.error("Déconnexion impossible", e));
+});
+
+auth.getRedirectResult().catch((e) => {
+  console.error("Échec du retour de connexion", e);
+  showToast("Connexion impossible. Réessaie.");
+});
+
+// Déclarée ici (hoistée), mais abonnée à la toute fin du fichier seulement :
+// onAuthStateChanged peut appeler ce callback tout de suite si Firebase a
+// déjà une session en cache, avant que collectionCache (plus bas dans le
+// fichier) n'existe encore.
+function onAuthChanged(user) {
+  currentUser = user ? user.uid : null;
+  signinBtn.classList.toggle("hidden", !!user);
+  accountSignedInEl.classList.toggle("hidden", !user);
+  if (user) {
+    accountAvatarEl.src = user.photoURL || "";
+    accountNameEl.textContent = user.displayName || user.email || "Connecté";
+  }
+  collectionCache = { user: null, cards: null }; // change de compte -> invalide le cache
+  // rawgProxy exige d'être connecté (voir functions/index.js) : on ne peut
+  // vérifier la connexion RAWG qu'une fois identifié, pas avant.
+  if (user && !poolsReady) checkApi();
+  else renderHome();
+  if (activeTab === "collection") loadCollection();
+}
 
 function fmtTime(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -228,7 +265,7 @@ function fmtTime(ms) {
 
 function renderHome() {
   if (!currentUser) {
-    counterEl.textContent = "Choisis ton pseudo pour ouvrir un paquet";
+    counterEl.textContent = "Connecte-toi pour ouvrir un paquet";
     regenEl.textContent = "";
   } else {
     counterEl.textContent = `${packState.count} / ${MAX_PACKS} paquets disponibles`;
@@ -271,14 +308,25 @@ function showToast(message) {
   toastTimer = setTimeout(() => toastEl.classList.add("hidden"), 4000);
 }
 
-// ---------- RAWG fetching ----------
+// ---------- RAWG fetching (via la Cloud Function rawgProxy, clé RAWG cachée
+// côté serveur ; voir functions/index.js) ----------
+
+const rawgProxy = functions.httpsCallable("rawgProxy");
+
+// path: "" pour la liste des jeux, "/<id>" pour le détail d'un jeu précis.
+// Renvoie toujours { status, body } (jamais un statut HTTP en erreur JS) ;
+// une vraie erreur (réseau, pas connecté...) est laissée remonter à l'appelant.
+async function callRawg(path, query) {
+  const { data } = await rawgProxy({ path, query });
+  return data;
+}
 
 let poolsReady = false;
 
 async function checkApi() {
   try {
-    const res = await fetch(`${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&platforms=${ALLOWED_PLATFORMS_PARAM}`);
-    if (!res.ok) throw new Error(res.status);
+    const { status } = await callRawg("", { page_size: 1, platforms: ALLOWED_PLATFORMS_PARAM });
+    if (status !== 200) throw new Error(status);
     poolsReady = true;
   } catch (e) {
     console.error("RAWG indisponible", e);
@@ -288,9 +336,13 @@ async function checkApi() {
 }
 
 async function fetchGameDetail(id) {
-  const res = await fetch(`${RAWG_BASE}/${id}?key=${RAWG_API_KEY}`);
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const { status, body } = await callRawg(`/${id}`, {});
+    return status === 200 ? body : null;
+  } catch (e) {
+    console.error("Détail RAWG impossible pour " + id, e);
+    return null;
+  }
 }
 
 // Les images RAWG (media.rawg.io) sont souvent en pleine résolution (plusieurs
@@ -380,16 +432,20 @@ async function drawOneGameAttempt(tierIndex) {
   const platformId = eligible[Math.floor(Math.random() * eligible.length)];
   const [start, end] = tierRange(platformId, tierIndex);
   const rank = start + Math.floor(Math.random() * (end - start));
-  const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${rank + 1}&platforms=${platformId}&ordering=-added&exclude_additions=true`;
-  const res = await fetch(url);
-  if (res.status === 404) {
+  const { status, body: data } = await callRawg("", {
+    page_size: 1,
+    page: rank + 1,
+    platforms: platformId,
+    ordering: "-added",
+    exclude_additions: true,
+  });
+  if (status === 404) {
     // Rang au-delà du total réel (hors DLC) -> on apprend le vrai plafond
     // pour cette console (une seule fois) et on retente avec une plage corrigée.
     if (!(platformId in platformAccessible)) await learnAccessibleCount(platformId);
     return null;
   }
-  if (!res.ok) throw new Error("RAWG error " + res.status);
-  const data = await res.json();
+  if (status !== 200) throw new Error("RAWG error " + status);
   const game = (data.results || [])[0];
   if (!game) return null;
   const detail = await fetchGameDetail(game.id);
@@ -514,7 +570,7 @@ const activeGenreFilters = new Set();
 
 async function loadCollection() {
   if (!currentUser) {
-    collectionHintEl.textContent = "Choisis ton pseudo pour voir ta collection.";
+    collectionHintEl.textContent = "Connecte-toi pour voir ta collection.";
     collectionHintEl.classList.remove("hidden");
     collectionFiltersEl.classList.add("hidden");
     collectionStatusEl.classList.add("hidden");
@@ -905,4 +961,4 @@ howModal.addEventListener("click", (e) => {
 
 setActiveTab("pack");
 renderHome();
-checkApi();
+auth.onAuthStateChanged(onAuthChanged);

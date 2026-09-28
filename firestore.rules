@@ -1,16 +1,16 @@
 rules_version = '2';
 
-// POC sans authentification : le "user" choisi dans le menu déroulant n'est
-// qu'une étiquette, pas une identité vérifiée. Ces règles empêchent
-// seulement la casse (pas de update/delete depuis le client, champs de
-// base obligatoires, users limités à la liste de l'app) ; elles ne
-// protègent pas contre quelqu'un qui écrirait dans la collection d'un
-// autre. À durcir avec Firebase Auth si l'app sort du cercle d'amis.
+// Avec Firebase Auth, userId est l'UID du compte connecté et request.auth.uid
+// est vérifié cryptographiquement par Firebase : personne ne peut écrire dans
+// la collection de quelqu'un d'autre en se contentant de choisir son nom,
+// contrairement à l'ancien menu déroulant. Toujours pas de update/delete
+// depuis le client (une carte obtenue est définitive) et champs de base
+// obligatoires sur la création.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/cards/{cardId} {
-      allow read: if userId in ["fabio", "raph", "thibaut", "zaven"];
-      allow create: if userId in ["fabio", "raph", "thibaut", "zaven"]
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
                     && request.resource.data.keys().hasAll(["name", "rarityKey", "packedAt"])
                     && request.resource.data.name is string
                     && request.resource.data.rarityKey is string;

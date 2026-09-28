@@ -12,3 +12,5 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 window.db = firebase.firestore();
+window.auth = firebase.auth();
+window.functions = firebase.functions();
