@@ -383,12 +383,22 @@ function withTimeout(promise, ms, fallback) {
 async function fetchWikipediaViews(name) {
   const url =
     `https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2` +
-    `&prop=pageviews&generator=search&gsrlimit=1` +
+    `&prop=pageviews|categories&cllimit=50&generator=search&gsrlimit=1` +
     `&gsrsearch=${encodeURIComponent(name + " video game")}&origin=*`;
   const res = await fetch(url);
   if (!res.ok) return 0;
   const data = await res.json();
-  const views = data?.query?.pages?.[0]?.pageviews;
+  const page = data?.query?.pages?.[0];
+  if (!page) return 0;
+  // Un nom court/générique ("Rio", "New Legends"...) peut faire matcher un
+  // homonyme sans rapport (ville, film...) au lieu du jeu. Les articles de
+  // jeux vidéo sont quasi systématiquement classés dans une catégorie du
+  // type "19xx/20xx video games" -> si aucune catégorie n'en parle, on
+  // considère que ce n'est probablement pas le bon article et on ignore.
+  const categories = page.categories || [];
+  const isVideoGameArticle = categories.some((c) => /video games?\b/i.test(c.title));
+  if (!isVideoGameArticle) return 0;
+  const views = page.pageviews;
   if (!views) return 0;
   return Object.values(views).reduce((sum, v) => sum + (v || 0), 0);
 }
