@@ -308,6 +308,49 @@ function rawgThumbnail(url, width) {
 const REVEAL_IMAGE_WIDTH = 640;
 const MINI_CARD_IMAGE_WIDTH = 300;
 
+// ---------- Bonus rareté Wikipédia ----------
+// RAWG sous-estime les classiques trop vieux pour être "ajoutés" par la
+// communauté RAWG (ex. Space Invaders : quasi toujours tiré en Commune côté
+// RAWG, alors que son article Wikipédia reste massivement consulté). On ne
+// touche pas au tirage (quelle carte sort, avec quelle probabilité) : on
+// vérifie juste, une fois le jeu tiré, si Wikipédia le traite comme un
+// classique, et si oui on relève l'étiquette de rareté affichée.
+// Best-effort : Wikipédia hors service, jeu introuvable, ou trop lent ->
+// on ne bonifie simplement rien, la carte garde sa rareté RAWG normale.
+//
+// Seuil choisi à vue de nez (~1000 vues/jour en moyenne sur 60 jours) faute
+// de pouvoir tester en conditions réelles depuis cet environnement (accès à
+// Wikipédia bloqué ici) ; à ajuster si trop/pas assez de cartes en profitent.
+const WIKIPEDIA_FAME_THRESHOLD = 60000;
+const WIKIPEDIA_TIMEOUT_MS = 4000;
+
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
+
+async function fetchWikipediaViews(name) {
+  const url =
+    `https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2` +
+    `&prop=pageviews&generator=search&gsrlimit=1` +
+    `&gsrsearch=${encodeURIComponent(name + " video game")}&origin=*`;
+  const res = await fetch(url);
+  if (!res.ok) return 0;
+  const data = await res.json();
+  const views = data?.query?.pages?.[0]?.pageviews;
+  if (!views) return 0;
+  return Object.values(views).reduce((sum, v) => sum + (v || 0), 0);
+}
+
+async function isWikipediaClassic(name) {
+  try {
+    const views = await withTimeout(fetchWikipediaViews(name), WIKIPEDIA_TIMEOUT_MS, 0);
+    return views >= WIKIPEDIA_FAME_THRESHOLD;
+  } catch (e) {
+    console.error("Wikipédia indisponible pour " + name, e);
+    return false;
+  }
+}
+
 function truncate(text, max) {
   if (!text) return "Pas de description disponible.";
   const clean = text.replace(/\s+/g, " ").trim();
@@ -416,11 +459,15 @@ async function drawPack() {
     };
   });
 
-  await Promise.all(
-    cards.map(async (card) => {
+  await Promise.all([
+    ...cards.map(async (card) => {
       card.imageReady = await preloadImage(rawgThumbnail(card.image, REVEAL_IMAGE_WIDTH));
-    })
-  );
+    }),
+    ...cards.map(async (card) => {
+      if (card.rarity.key === "l") return; // déjà au maximum, rien à vérifier
+      if (await isWikipediaClassic(card.name)) card.rarity = RARITIES[RARITIES.length - 1];
+    }),
+  ]);
 
   cards.sort((a, b) => RARITIES.indexOf(a.rarity) - RARITIES.indexOf(b.rarity));
   return cards;
