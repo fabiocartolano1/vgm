@@ -17,5 +17,11 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
-  }
+  },
+  "headers": [
+    {
+      "source": "**/*.@(html|js|css)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ]
 }
