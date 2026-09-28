@@ -40,6 +40,31 @@ const RARITIES = [
   { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
 ];
 
+// Genres RAWG (slug -> libellé FR). Le slug est gardé sur la carte pour
+// pouvoir filtrer la collection par catégorie plus tard.
+const GENRE_LABELS = {
+  action: "Action",
+  adventure: "Aventure",
+  "role-playing-games-rpg": "RPG",
+  strategy: "Stratégie",
+  shooter: "Tir",
+  casual: "Casual",
+  simulation: "Simulation",
+  puzzle: "Puzzle",
+  arcade: "Arcade",
+  platformer: "Plateforme",
+  "massively-multiplayer": "MMO",
+  racing: "Course",
+  sports: "Sport",
+  fighting: "Combat",
+  family: "Famille",
+  "board-games": "Jeu de société",
+  card: "Cartes",
+  educational: "Éducatif",
+  indie: "Indé",
+};
+const MAX_GENRES_PER_CARD = 3;
+
 // Garantie : au moins une carte Rare (ou mieux) par paquet.
 const GUARANTEED_TIER = RARITIES.findIndex((r) => r.key === "r");
 
@@ -246,11 +271,14 @@ async function drawPack() {
     const platforms = (detail.platforms || g.platforms || [])
       .map((p) => p.platform.name)
       .join(" · ");
+    const genres = (detail.genres || g.genres || [])
+      .slice(0, MAX_GENRES_PER_CARD)
+      .map((genre) => ({ slug: genre.slug, label: GENRE_LABELS[genre.slug] || genre.name }));
     return {
       name: g.name,
       image: g.background_image,
       platforms: platforms || "Plateforme inconnue",
-      added,
+      genres,
       summary: truncate(detail.description_raw, 160),
       rarity,
       atk,
@@ -329,8 +357,16 @@ function renderCard(index) {
   setCardImage(card.image);
   cardEl.querySelector(".card-title").textContent = card.name;
   cardEl.querySelector(".card-platforms").textContent = card.platforms;
-  cardEl.querySelector(".card-popularity").textContent =
-    `${card.added.toLocaleString("fr-FR")} joueur${card.added > 1 ? "s" : ""} RAWG (popularité réelle → rareté)`;
+  const tagsEl = cardEl.querySelector(".card-tags");
+  tagsEl.innerHTML = "";
+  for (const genre of card.genres) {
+    const tag = document.createElement("span");
+    tag.className = "card-tag";
+    tag.dataset.genre = genre.slug;
+    tag.textContent = genre.label;
+    tagsEl.appendChild(tag);
+  }
+  tagsEl.hidden = card.genres.length === 0;
   cardEl.querySelector(".card-summary").textContent = card.summary;
   cardEl.querySelector(".card-badge").textContent = card.rarity.label;
   cardEl.querySelector(".card-badge").style.background = card.rarity.color;

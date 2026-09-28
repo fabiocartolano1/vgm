@@ -283,9 +283,24 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.card-popularity {
-  font-size: 10.5px;
-  color: var(--muted);
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.card-tags[hidden] { display: none; }
+
+.card-tag {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--rarity-color, var(--text));
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid color-mix(in srgb, var(--rarity-color, #888) 55%, transparent);
+  white-space: nowrap;
 }
 
 .card-summary {
