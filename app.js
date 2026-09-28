@@ -216,24 +216,26 @@ const toastEl = document.getElementById("toast");
 
 let currentUser = null;
 
-// Sur mobile (Safari iOS notamment), les popups d'auth sont peu fiables ->
-// on utilise la redirection : signInWithRedirect envoie sur la page Google,
-// puis getRedirectResult() récupère le résultat au retour sur l'app.
+// Popup plutôt que redirection : la redirection a besoin d'un stockage
+// partagé entre le site (.web.app) et le domaine d'auth (.firebaseapp.com),
+// que Safari et Chrome bloquent désormais (cookies tiers) -> retour sur la
+// page sans être connecté. La popup n'a pas ce problème. Appelée directement
+// dans le handler du clic pour ne pas être bloquée par le navigateur.
 signinBtn.addEventListener("click", () => {
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider).catch((e) => {
+  auth.signInWithPopup(provider).catch((e) => {
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
     console.error("Connexion impossible", e);
-    showToast("Connexion impossible. Réessaie.");
+    showToast(
+      e.code === "auth/popup-blocked"
+        ? "Popup bloquée : autorise les popups pour ce site et réessaie."
+        : "Connexion impossible. Réessaie."
+    );
   });
 });
 
 signoutBtn.addEventListener("click", () => {
   auth.signOut().catch((e) => console.error("Déconnexion impossible", e));
-});
-
-auth.getRedirectResult().catch((e) => {
-  console.error("Échec du retour de connexion", e);
-  showToast("Connexion impossible. Réessaie.");
 });
 
 // Déclarée ici (hoistée), mais abonnée à la toute fin du fichier seulement :
