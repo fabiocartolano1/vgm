@@ -40,6 +40,9 @@ const RARITIES = [
   { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
 ];
 
+// Garantie : au moins une carte Rare (ou mieux) par paquet.
+const GUARANTEED_TIER = RARITIES.findIndex((r) => r.key === "r");
+
 // Chance par carte déduite de la chance par paquet :
 // P(meilleure >= k) = 1 - (1 - p(carte >= k))^5
 (function computeCardOdds() {
@@ -84,14 +87,6 @@ const TIER_RANKS = {
 function tierRange(platformId, i) {
   const t = TIER_RANKS[platformId];
   return [t[i + 1] ?? 0, t[i]];
-}
-
-function rarityForAdded(added) {
-  let result = RARITIES[0];
-  for (const r of RARITIES) {
-    if (added >= r.min) result = r;
-  }
-  return result;
 }
 
 // ---------- Pack storage (en mémoire seulement pour le POC) ----------
@@ -226,13 +221,16 @@ async function drawOneGameAttempt(tierIndex) {
 async function drawOneGame(tierIndex) {
   for (let i = 0; i < MAX_DRAW_ATTEMPTS; i++) {
     const drawn = await drawOneGameAttempt(tierIndex);
-    if (drawn) return drawn;
+    if (drawn) return { ...drawn, tierIndex };
   }
   return null;
 }
 
 async function drawPack() {
   const tiers = Array.from({ length: CARDS_PER_PACK }, rollTierIndex);
+  // Pas de Rare ou mieux -> une carte passe Rare. Les chances de SR/UR/L ne
+  // changent pas, seul le cas "meilleure carte C/PC" devient "meilleure carte R".
+  if (Math.max(...tiers) < GUARANTEED_TIER) tiers[tiers.length - 1] = GUARANTEED_TIER;
   const drawn = (await Promise.all(tiers.map(drawOneGame))).filter(Boolean);
   const games = drawn.map((d) => d.game);
   const details = drawn.map((d) => d.detail);
@@ -240,7 +238,9 @@ async function drawPack() {
   const cards = games.map((g, i) => {
     const detail = details[i] || g;
     const added = g.added || 0;
-    const rarity = rarityForAdded(added);
+    // Rareté = tranche tirée (et non recalculée depuis "added") : les tranches
+    // de TIER_RANKS incluaient les DLC, un recalcul pourrait casser la garantie.
+    const rarity = RARITIES[drawn[i].tierIndex];
     const atk = detail.metacritic ?? Math.round((detail.rating || 0) * 20);
     const def = Math.min(100, Math.round(Math.log10(added + 1) * 40));
     const platforms = (detail.platforms || g.platforms || [])
@@ -306,14 +306,27 @@ function spawnFireworks() {
   }
 }
 
+// Pas d'image (ou image cassée) -> logo VGM à la place.
+function setCardImage(src) {
+  const top = cardEl.querySelector(".card-face-top");
+  top.style.backgroundImage = "none";
+  top.classList.add("no-image");
+  if (!src) return;
+  const img = new Image();
+  img.onload = () => {
+    if (currentCards[currentIndex]?.image !== src) return;
+    top.style.backgroundImage = `url('${src}')`;
+    top.classList.remove("no-image");
+  };
+  img.src = src;
+}
+
 function renderCard(index) {
   const card = currentCards[index];
   cardCounterEl.textContent = `Carte ${index + 1} / ${CARDS_PER_PACK}`;
 
   cardEl.style.setProperty("--rarity-color", card.rarity.color);
-  cardEl.querySelector(".card-face-top").style.backgroundImage = card.image
-    ? `url('${card.image}')`
-    : "none";
+  setCardImage(card.image);
   cardEl.querySelector(".card-title").textContent = card.name;
   cardEl.querySelector(".card-platforms").textContent = card.platforms;
   cardEl.querySelector(".card-popularity").textContent =
