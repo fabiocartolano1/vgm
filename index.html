@@ -10,6 +10,20 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <header class="topbar">
+    <select id="user-select" aria-label="Joueur">
+      <option value="" disabled selected>Choisis ton pseudo</option>
+      <option value="fabio">Fabio</option>
+      <option value="raph">Raph</option>
+      <option value="thibaut">Thibaut</option>
+    </select>
+    <nav class="tabs" role="tablist">
+      <button id="tab-pack-btn" class="tab-btn" role="tab" aria-selected="true">Ouvrir</button>
+      <button id="tab-collection-btn" class="tab-btn" role="tab" aria-selected="false">Collection</button>
+    </nav>
+  </header>
+
+  <div id="tab-pack">
   <div id="home">
     <h1>Ouvrir un paquet</h1>
     <p class="subtitle">Découvrez 5 nouvelles cartes de jeux vidéo</p>
@@ -59,6 +73,17 @@
 
     <button id="continue-btn" class="btn-open">Encore 4 cartes</button>
   </div>
+  </div>
+
+  <div id="tab-collection" class="hidden">
+    <h1>Collection</h1>
+    <p id="collection-hint" class="subtitle">Choisis ton pseudo pour voir ta collection</p>
+
+    <div id="collection-filters" class="filters hidden"></div>
+
+    <p id="collection-status" class="collection-status hidden"></p>
+    <div id="collection-grid" class="collection-grid"></div>
+  </div>
 
   <div id="how-modal" class="modal hidden">
     <div class="modal-content">
@@ -82,6 +107,11 @@
     Données jeux vidéo fournies par <a href="https://rawg.io" target="_blank" rel="noopener">RAWG.io</a>
   </footer>
 
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

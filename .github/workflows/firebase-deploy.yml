@@ -25,6 +25,21 @@ jobs:
           fi
           printf 'const RAWG_API_KEY = "%s";\n' "$RAWG_API_KEY" > config.js
 
+      # Règles Firestore (firestore.rules) : l'action hosting ci-dessous ne
+      # déploie que le site, pas les règles. Ne bloque pas le déploiement du
+      # site si la base Firestore n'a pas encore été créée dans la console
+      # Firebase (étape manuelle, unique, à faire une fois pour tout le projet).
+      - name: Déployer les règles Firestore
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+          npx firebase-tools@latest deploy --only firestore:rules --project video-game-masters --non-interactive || \
+            echo "::warning::Règles Firestore non déployées (la base Firestore doit être créée une fois dans la console Firebase)."
+          rm -f /tmp/firebase-sa.json
+
       - name: Déployer en production
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

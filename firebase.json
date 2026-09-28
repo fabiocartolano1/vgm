@@ -3,14 +3,19 @@
     "public": ".",
     "ignore": [
       "firebase.json",
-      "firebase.js",
       "firebase-debug.log",
       "apikey.txt",
       "consoles.txt",
       "projet.md",
       "wikimaster.txt",
+      "firestore.rules",
+      "firestore.indexes.json",
       "**/.*",
       "**/node_modules/**"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

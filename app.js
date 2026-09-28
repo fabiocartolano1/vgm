@@ -39,6 +39,7 @@ const RARITIES = [
   { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 1200, packOdds: 0.04 },
   { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
 ];
+const RARITY_BY_KEY = Object.fromEntries(RARITIES.map((r) => [r.key, r]));
 
 // Genres RAWG (slug -> libellé FR). Le slug est gardé sur la carte pour
 // pouvoir filtrer la collection par catégorie plus tard.
@@ -159,6 +160,33 @@ const prevBtn = document.getElementById("prev-btn");
 const nextBtn = document.getElementById("next-btn");
 const continueBtn = document.getElementById("continue-btn");
 
+const userSelectEl = document.getElementById("user-select");
+const tabPackBtn = document.getElementById("tab-pack-btn");
+const tabCollectionBtn = document.getElementById("tab-collection-btn");
+const tabPackEl = document.getElementById("tab-pack");
+const tabCollectionEl = document.getElementById("tab-collection");
+const collectionHintEl = document.getElementById("collection-hint");
+const collectionFiltersEl = document.getElementById("collection-filters");
+const collectionStatusEl = document.getElementById("collection-status");
+const collectionGridEl = document.getElementById("collection-grid");
+const toastEl = document.getElementById("toast");
+
+// ---------- Utilisateur (POC : pas d'authentification, juste une étiquette
+// choisie dans le menu et gardée sur cet appareil pour ne pas la redemander) ----------
+
+const USERS = ["fabio", "raph", "thibaut"];
+
+let currentUser = localStorage.getItem("vgm_user") || "";
+if (!USERS.includes(currentUser)) currentUser = "";
+userSelectEl.value = currentUser;
+
+userSelectEl.addEventListener("change", () => {
+  currentUser = userSelectEl.value;
+  localStorage.setItem("vgm_user", currentUser);
+  renderHome();
+  if (activeTab === "collection") loadCollection();
+});
+
 function fmtTime(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const m = Math.floor(s / 60);
@@ -167,16 +195,49 @@ function fmtTime(ms) {
 }
 
 function renderHome() {
-  counterEl.textContent = `${packState.count} / ${MAX_PACKS} paquets disponibles`;
-  if (packState.count < MAX_PACKS && packState.nextRegenAt) {
-    regenEl.textContent = `Prochain dans ${fmtTime(packState.nextRegenAt - Date.now())}`;
-  } else {
+  if (!currentUser) {
+    counterEl.textContent = "Choisis ton pseudo pour ouvrir un paquet";
     regenEl.textContent = "";
+  } else {
+    counterEl.textContent = `${packState.count} / ${MAX_PACKS} paquets disponibles`;
+    regenEl.textContent =
+      packState.count < MAX_PACKS && packState.nextRegenAt
+        ? `Prochain dans ${fmtTime(packState.nextRegenAt - Date.now())}`
+        : "";
   }
-  openBtn.disabled = packState.count <= 0 || !poolsReady;
+  openBtn.disabled = packState.count <= 0 || !poolsReady || !currentUser;
 }
 
 setInterval(tickRegen, 1000);
+
+// ---------- Onglets Ouvrir / Collection ----------
+
+let activeTab = "pack";
+
+function setActiveTab(tab) {
+  activeTab = tab;
+  tabPackBtn.classList.toggle("active", tab === "pack");
+  tabPackBtn.setAttribute("aria-selected", String(tab === "pack"));
+  tabCollectionBtn.classList.toggle("active", tab === "collection");
+  tabCollectionBtn.setAttribute("aria-selected", String(tab === "collection"));
+  tabPackEl.classList.toggle("hidden", tab !== "pack");
+  tabCollectionEl.classList.toggle("hidden", tab !== "collection");
+  if (tab === "collection") loadCollection();
+}
+
+tabPackBtn.addEventListener("click", () => setActiveTab("pack"));
+tabCollectionBtn.addEventListener("click", () => setActiveTab("collection"));
+
+// ---------- Toast (erreurs de sauvegarde/chargement Firestore) ----------
+
+let toastTimer = null;
+
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.add("hidden"), 4000);
+}
 
 // ---------- RAWG fetching ----------
 
@@ -315,6 +376,170 @@ async function drawPack() {
   return cards;
 }
 
+// ---------- Collection (Firestore) ----------
+// users/{user}/cards/{id} : append-only (voir firestore.rules), une carte
+// par jeu obtenu. Pas d'authentification : "user" n'est qu'une étiquette.
+
+function saveCardsToFirestore(cards, user) {
+  if (!window.db || !user) return;
+  const ref = db.collection("users").doc(user).collection("cards");
+  const packedAt = firebase.firestore.FieldValue.serverTimestamp();
+  const batch = db.batch();
+  for (const card of cards) {
+    batch.set(ref.doc(), {
+      name: card.name,
+      image: card.image || null,
+      platforms: card.platforms,
+      genres: card.genres,
+      summary: card.summary,
+      rarityKey: card.rarity.key,
+      atk: card.atk,
+      def: card.def,
+      packedAt,
+    });
+  }
+  batch.commit().catch((e) => {
+    console.error("Sauvegarde Firestore impossible", e);
+    showToast("Paquet ouvert, mais la sauvegarde a échoué. Vérifie ta connexion.");
+  });
+}
+
+let collectionCache = { user: null, cards: null };
+const activeGenreFilters = new Set();
+
+async function loadCollection() {
+  if (!currentUser) {
+    collectionHintEl.textContent = "Choisis ton pseudo pour voir ta collection.";
+    collectionHintEl.classList.remove("hidden");
+    collectionFiltersEl.classList.add("hidden");
+    collectionStatusEl.classList.add("hidden");
+    collectionGridEl.innerHTML = "";
+    return;
+  }
+  collectionHintEl.classList.add("hidden");
+
+  if (!window.db) {
+    collectionStatusEl.textContent = "Firestore indisponible.";
+    collectionStatusEl.classList.remove("hidden");
+    return;
+  }
+
+  if (collectionCache.user === currentUser) {
+    renderCollection();
+    return;
+  }
+
+  activeGenreFilters.clear();
+  collectionFiltersEl.classList.add("hidden");
+  collectionGridEl.innerHTML = "";
+  collectionStatusEl.textContent = "Chargement de la collection…";
+  collectionStatusEl.classList.remove("hidden");
+
+  try {
+    const snap = await db
+      .collection("users")
+      .doc(currentUser)
+      .collection("cards")
+      .orderBy("packedAt", "desc")
+      .get();
+    collectionCache = { user: currentUser, cards: snap.docs.map((d) => d.data()) };
+  } catch (e) {
+    console.error("Chargement de la collection impossible", e);
+    collectionStatusEl.textContent = "Erreur de chargement de la collection.";
+    collectionCache = { user: currentUser, cards: [] };
+    return;
+  }
+
+  renderCollection();
+}
+
+function buildGenreFilters(cards) {
+  const genres = new Map();
+  for (const card of cards) {
+    for (const g of card.genres || []) if (!genres.has(g.slug)) genres.set(g.slug, g.label);
+  }
+
+  collectionFiltersEl.innerHTML = "";
+  collectionFiltersEl.classList.toggle("hidden", genres.size === 0);
+  for (const [slug, label] of genres) {
+    const chip = document.createElement("button");
+    chip.className = "filter-chip" + (activeGenreFilters.has(slug) ? " active" : "");
+    chip.textContent = label;
+    chip.addEventListener("click", () => {
+      if (activeGenreFilters.has(slug)) activeGenreFilters.delete(slug);
+      else activeGenreFilters.add(slug);
+      renderCollection();
+    });
+    collectionFiltersEl.appendChild(chip);
+  }
+}
+
+function buildMiniCard(card) {
+  const rarity = RARITY_BY_KEY[card.rarityKey];
+  const el = document.createElement("div");
+  el.className = "mini-card";
+  el.style.setProperty("--rarity-color", rarity ? rarity.color : "#888");
+
+  const badge = document.createElement("div");
+  badge.className = "mini-card-badge";
+  badge.style.background = rarity ? rarity.color : "#888";
+  badge.textContent = rarity ? rarity.label : "?";
+  el.appendChild(badge);
+
+  const imgWrap = document.createElement("div");
+  imgWrap.className = "mini-card-img no-image";
+  const logo = document.createElement("div");
+  logo.className = "pack-logo card-logo";
+  logo.textContent = "VGM";
+  imgWrap.appendChild(logo);
+  if (card.image) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.addEventListener("load", () => imgWrap.classList.remove("no-image"));
+    img.addEventListener("error", () => img.remove());
+    img.src = card.image;
+    imgWrap.appendChild(img);
+  }
+  el.appendChild(imgWrap);
+
+  const body = document.createElement("div");
+  body.className = "mini-card-body";
+  const name = document.createElement("div");
+  name.className = "mini-card-name";
+  name.textContent = card.name;
+  body.appendChild(name);
+  el.appendChild(body);
+
+  return el;
+}
+
+function renderCollection() {
+  const cards = collectionCache.cards || [];
+  buildGenreFilters(cards);
+
+  if (cards.length === 0) {
+    collectionStatusEl.textContent = "Aucune carte pour l'instant. Ouvre un paquet !";
+    collectionStatusEl.classList.remove("hidden");
+    collectionGridEl.innerHTML = "";
+    return;
+  }
+
+  const filtered = activeGenreFilters.size
+    ? cards.filter((c) => (c.genres || []).some((g) => activeGenreFilters.has(g.slug)))
+    : cards;
+
+  if (filtered.length === 0) {
+    collectionStatusEl.textContent = "Aucune carte pour cette catégorie.";
+    collectionStatusEl.classList.remove("hidden");
+    collectionGridEl.innerHTML = "";
+    return;
+  }
+
+  collectionStatusEl.classList.add("hidden");
+  collectionGridEl.innerHTML = "";
+  for (const card of filtered) collectionGridEl.appendChild(buildMiniCard(card));
+}
+
 // ---------- Reveal UI ----------
 
 let currentCards = [];
@@ -437,7 +662,7 @@ function endReveal() {
 }
 
 async function openPack() {
-  if (packState.count <= 0 || !poolsReady) return;
+  if (packState.count <= 0 || !poolsReady || !currentUser) return;
   openBtn.disabled = true;
   packEl.classList.add("loading");
 
@@ -457,6 +682,8 @@ async function openPack() {
 
   packEl.classList.remove("loading");
   consumePack();
+  saveCardsToFirestore(cards, currentUser);
+  collectionCache = { user: null, cards: null }; // le paquet ouvert invalide le cache
 
   currentCards = cards;
   currentIndex = 0;
@@ -547,5 +774,6 @@ howModal.addEventListener("click", (e) => {
   if (e.target === howModal) howModal.classList.add("hidden");
 });
 
+setActiveTab("pack");
 renderHome();
 checkApi();
