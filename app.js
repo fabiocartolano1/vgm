@@ -40,6 +40,13 @@ const RARITIES = [
   { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
 ];
 const RARITY_BY_KEY = Object.fromEntries(RARITIES.map((r) => [r.key, r]));
+const RARITY_ORDER = Object.fromEntries(RARITIES.map((r, i) => [r.key, i]));
+
+// Plus rare en premier ; à rareté égale, garde l'ordre d'arrivée (tri stable
+// sur des cartes déjà triées par packedAt desc).
+function sortByRarityDesc(cards) {
+  return cards.slice().sort((a, b) => (RARITY_ORDER[b.rarityKey] ?? -1) - (RARITY_ORDER[a.rarityKey] ?? -1));
+}
 
 // Genres RAWG (slug -> libellé FR). Le slug est gardé sur la carte pour
 // pouvoir filtrer la collection par catégorie plus tard.
@@ -493,7 +500,7 @@ async function loadCollection() {
       .collection("cards")
       .orderBy("packedAt", "desc")
       .get();
-    collectionCache = { user: currentUser, cards: snap.docs.map((d) => d.data()) };
+    collectionCache = { user: currentUser, cards: sortByRarityDesc(snap.docs.map((d) => d.data())) };
   } catch (e) {
     console.error("Chargement de la collection impossible", e);
     collectionStatusEl.textContent = "Erreur de chargement de la collection.";
