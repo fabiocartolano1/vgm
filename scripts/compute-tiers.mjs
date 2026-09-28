@@ -15,7 +15,7 @@ if (!KEY) throw new Error("RAWG_API_KEY manquant");
 const BASE = "https://api.rawg.io/api/games";
 const PLATFORMS = [4, 27, 15, 16, 18, 187, 80, 14, 1, 186, 7, 9, 8, 19, 17, 10, 11, 105, 83, 43, 24];
 // Rangs mondiaux délimitant PC, R, SR, UR, L (le reste est Commune).
-const GLOBAL_RANKS = [10000, 5000, 1500, 400, 100];
+const GLOBAL_RANKS = [10000, 2000, 800, 300, 50];
 const MAX_ACCESSIBLE = 10000; // RAWG ne pagine pas au-delà
 
 let calls = 0;
