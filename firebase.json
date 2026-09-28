@@ -11,6 +11,7 @@
       "firestore.rules",
       "firestore.indexes.json",
       "functions",
+      "scripts",
       "**/.*",
       "**/node_modules/**"
     ]

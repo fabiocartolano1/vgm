@@ -1,0 +1,20 @@
+name: Calculer les tranches de rareté
+
+# Lancé à la main (onglet Actions -> Run workflow). Affiche dans les logs les
+# nouvelles valeurs de TIER_RANKS à recopier dans app.js.
+on:
+  workflow_dispatch:
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Calcul
+        env:
+          RAWG_API_KEY: ${{ secrets.RAWG_API_KEY }}
+        run: node scripts/compute-tiers.mjs
