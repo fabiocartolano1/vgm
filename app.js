@@ -251,6 +251,25 @@ async function drawOneGame(tierIndex) {
   return null;
 }
 
+// Charge et décode l'image avant l'affichage de la carte (false si absente,
+// en erreur ou plus lente que timeoutMs : la carte affichera le logo).
+const IMAGE_PRELOAD_TIMEOUT_MS = 8000;
+const preloadedImages = [];
+
+function preloadImage(src, timeoutMs = IMAGE_PRELOAD_TIMEOUT_MS) {
+  if (!src) return Promise.resolve(false);
+  const img = new Image();
+  preloadedImages.push(img); // garde une référence pour que le cache reste chaud
+  if (preloadedImages.length > CARDS_PER_PACK * 2) preloadedImages.shift();
+  const loaded = new Promise((resolve) => {
+    img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => resolve(true));
+    img.onerror = () => resolve(false);
+  });
+  img.src = src;
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs));
+  return Promise.race([loaded, timeout]);
+}
+
 async function drawPack() {
   const tiers = Array.from({ length: CARDS_PER_PACK }, rollTierIndex);
   // Pas de Rare ou mieux -> une carte passe Rare. Les chances de SR/UR/L ne
@@ -285,6 +304,12 @@ async function drawPack() {
       def,
     };
   });
+
+  await Promise.all(
+    cards.map(async (card) => {
+      card.imageReady = await preloadImage(card.image);
+    })
+  );
 
   cards.sort((a, b) => RARITIES.indexOf(a.rarity) - RARITIES.indexOf(b.rarity));
   return cards;
@@ -335,8 +360,16 @@ function spawnFireworks() {
 }
 
 // Pas d'image (ou image cassée) -> logo VGM à la place.
-function setCardImage(src) {
+// Image préchargée à l'ouverture du paquet -> affichée tout de suite.
+// Sinon (pas d'image, erreur, trop lente) logo, puis l'image si elle finit par arriver.
+function setCardImage(card) {
+  const src = card.image;
   const top = cardEl.querySelector(".card-face-top");
+  if (card.imageReady) {
+    top.style.backgroundImage = `url('${src}')`;
+    top.classList.remove("no-image");
+    return;
+  }
   top.style.backgroundImage = "none";
   top.classList.add("no-image");
   if (!src) return;
@@ -354,7 +387,7 @@ function renderCard(index) {
   cardCounterEl.textContent = `Carte ${index + 1} / ${CARDS_PER_PACK}`;
 
   cardEl.style.setProperty("--rarity-color", card.rarity.color);
-  setCardImage(card.image);
+  setCardImage(card);
   cardEl.querySelector(".card-title").textContent = card.name;
   cardEl.querySelector(".card-platforms").textContent = card.platforms;
   const tagsEl = cardEl.querySelector(".card-tags");
@@ -406,7 +439,7 @@ function endReveal() {
 async function openPack() {
   if (packState.count <= 0 || !poolsReady) return;
   openBtn.disabled = true;
-  packEl.classList.add("shake");
+  packEl.classList.add("loading");
 
   let cards;
   try {
@@ -416,13 +449,13 @@ async function openPack() {
     openBtn.textContent = prevText;
   } catch (e) {
     console.error(e);
-    packEl.classList.remove("shake");
+    packEl.classList.remove("loading");
     openBtn.disabled = false;
     counterEl.textContent = "Erreur RAWG : " + e.message;
     return;
   }
 
-  packEl.classList.remove("shake");
+  packEl.classList.remove("loading");
   consumePack();
 
   currentCards = cards;
