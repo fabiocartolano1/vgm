@@ -206,7 +206,7 @@ const toastEl = document.getElementById("toast");
 // ---------- Utilisateur (POC : pas d'authentification, juste une étiquette
 // choisie dans le menu et gardée sur cet appareil pour ne pas la redemander) ----------
 
-const USERS = ["fabio", "raph", "thibaut"];
+const USERS = ["fabio", "raph", "thibaut", "zaven"];
 
 let currentUser = localStorage.getItem("vgm_user") || "";
 if (!USERS.includes(currentUser)) currentUser = "";

@@ -9,8 +9,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/cards/{cardId} {
-      allow read: if userId in ["fabio", "raph", "thibaut"];
-      allow create: if userId in ["fabio", "raph", "thibaut"]
+      allow read: if userId in ["fabio", "raph", "thibaut", "zaven"];
+      allow create: if userId in ["fabio", "raph", "thibaut", "zaven"]
                     && request.resource.data.keys().hasAll(["name", "rarityKey", "packedAt"])
                     && request.resource.data.name is string
                     && request.resource.data.rarityKey is string;
