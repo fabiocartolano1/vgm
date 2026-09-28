@@ -406,13 +406,22 @@ function rollTierIndex() {
 const MAX_DRAW_ATTEMPTS = 5;
 
 async function drawOneGameAttempt(tierIndex) {
-  const eligible = ALLOWED_PLATFORMS.filter((p) => {
+  // Tirage uniforme sur l'ensemble des (console, rang) de la tranche : une
+  // console est choisie en proportion du nombre de jeux qu'elle y a. Sinon
+  // (console choisie à chance égale) l'unique Légendaire d'une petite console
+  // sortait aussi souvent que toutes celles du PC réunies.
+  const sizes = ALLOWED_PLATFORMS.map((p) => {
     const [start, end] = tierRange(p, tierIndex);
-    return end > start;
+    return Math.max(0, end - start);
   });
-  const platformId = eligible[Math.floor(Math.random() * eligible.length)];
-  const [start, end] = tierRange(platformId, tierIndex);
-  const rank = start + Math.floor(Math.random() * (end - start));
+  const total = sizes.reduce((a, b) => a + b, 0);
+  if (total === 0) return null;
+  let pick = Math.floor(Math.random() * total);
+  let i = 0;
+  while (pick >= sizes[i]) pick -= sizes[i++];
+  const platformId = ALLOWED_PLATFORMS[i];
+  const [start] = tierRange(platformId, tierIndex);
+  const rank = start + pick;
   const { status, body: data } = await callRawg("", {
     page_size: 1,
     page: rank + 1,
