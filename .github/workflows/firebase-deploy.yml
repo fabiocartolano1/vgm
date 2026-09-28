@@ -1,0 +1,54 @@
+name: Deploy Firebase Hosting
+
+on:
+  push:
+
+concurrency:
+  group: firebase-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # config.js est gitignoré : on le génère à partir du secret RAWG_API_KEY.
+      - name: Générer config.js
+        env:
+          RAWG_API_KEY: ${{ secrets.RAWG_API_KEY }}
+        run: |
+          if [ -z "$RAWG_API_KEY" ]; then
+            echo "::error::Secret RAWG_API_KEY manquant"
+            exit 1
+          fi
+          printf 'const RAWG_API_KEY = "%s";\n' "$RAWG_API_KEY" > config.js
+
+      # main -> site en production
+      - name: Déployer en production
+        if: github.ref == 'refs/heads/main'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: video-game-masters
+          channelId: live
+
+      # Les canaux Firebase n'acceptent que [a-z0-9-] : on nettoie le nom de branche.
+      - name: Nom du canal de prévisualisation
+        id: channel
+        if: github.ref != 'refs/heads/main'
+        run: |
+          id=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-36 | sed -E 's/-+$//')
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # autres branches -> canal de prévisualisation (URL temporaire, 7 jours)
+      - name: Déployer en prévisualisation
+        if: github.ref != 'refs/heads/main'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: video-game-masters
+          channelId: ${{ steps.channel.outputs.id }}
+          expires: 7d
