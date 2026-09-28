@@ -155,7 +155,8 @@ h1 {
 }
 
 #tab-pack,
-#tab-collection {
+#tab-collection,
+#tab-friends {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -671,8 +672,77 @@ h1 {
 
 /* ---------- Collection ---------- */
 
-#tab-collection {
+#tab-collection,
+#tab-friends {
   max-width: 460px;
+}
+
+.back-btn {
+  align-self: flex-start;
+  margin: 0 0 -8px;
+  padding: 6px 0;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+/* ---------- Amis ---------- */
+
+.friends-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid #2a2d2a;
+  border-radius: 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.friend-row:active { border-color: var(--accent); }
+
+@media (hover: hover) {
+  .friend-row:hover { border-color: var(--accent); }
+}
+
+.friend-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #2a2d2a;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: var(--muted);
+  object-fit: cover;
+}
+
+.friend-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .filters {
@@ -813,8 +883,13 @@ footer a { color: var(--muted); }
   body { padding-top: max(24px, env(safe-area-inset-top)); }
   .subtitle { margin-bottom: 24px; }
   .topbar { margin-bottom: 22px; }
-  .account-btn { font-size: 12px; padding: 7px 12px 7px 8px; }
-  #account-name { max-width: 60px; font-size: 12px; }
+  /* 3 onglets + compte ne tiennent pas sur une ligne : compte en haut,
+     onglets pleine largeur en dessous. */
+  .topbar { flex-wrap: wrap; row-gap: 12px; }
+  #account { width: 100%; }
+  #account-name { max-width: none; flex: 1 1 auto; }
+  .tabs { width: 100%; }
+  .tab-btn { flex: 1 1 0; padding: 8px 6px; font-size: 12.5px; }
   .tab-btn { padding: 7px 10px; font-size: 11.5px; }
   .modal-content { padding: 22px 18px; }
   .rarity-grid { gap: 8px; }

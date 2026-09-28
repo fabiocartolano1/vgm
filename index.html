@@ -18,7 +18,7 @@
         Se connecter
       </button>
       <div id="account-signed-in" class="hidden">
-        <img id="account-avatar" alt="" />
+        <img id="account-avatar" alt="" referrerpolicy="no-referrer" hidden />
         <span id="account-name"></span>
         <button id="signout-btn" class="link-btn">Se déconnecter</button>
       </div>
@@ -26,6 +26,7 @@
     <nav class="tabs" role="tablist">
       <button id="tab-pack-btn" class="tab-btn" role="tab" aria-selected="true">Ouvrir</button>
       <button id="tab-collection-btn" class="tab-btn" role="tab" aria-selected="false">Collection</button>
+      <button id="tab-friends-btn" class="tab-btn" role="tab" aria-selected="false">Amis</button>
     </nav>
   </header>
 
@@ -82,13 +83,21 @@
   </div>
 
   <div id="tab-collection" class="hidden">
-    <h1>Collection</h1>
+    <button id="collection-back" class="link-btn back-btn hidden">‹ Mes cartes</button>
+    <h1 id="collection-title">Collection</h1>
     <p id="collection-hint" class="subtitle">Connecte-toi pour voir ta collection</p>
 
     <div id="collection-filters" class="filters hidden"></div>
 
     <p id="collection-status" class="collection-status hidden"></p>
     <div id="collection-grid" class="collection-grid"></div>
+  </div>
+
+  <div id="tab-friends" class="hidden">
+    <h1>Amis</h1>
+    <p class="subtitle">Les collections des autres joueurs</p>
+    <p id="friends-status" class="collection-status hidden"></p>
+    <div id="friends-list" class="friends-list"></div>
   </div>
 
   <div id="how-modal" class="modal hidden">

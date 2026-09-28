@@ -1,20 +1,27 @@
 rules_version = '2';
 
-// Avec Firebase Auth, userId est l'UID du compte connecté et request.auth.uid
-// est vérifié cryptographiquement par Firebase : personne ne peut écrire dans
-// la collection de quelqu'un d'autre en se contentant de choisir son nom,
-// contrairement à l'ancien menu déroulant. Toujours pas de update/delete
-// depuis le client (une carte obtenue est définitive) et champs de base
-// obligatoires sur la création.
+// userId est l'UID Firebase du compte connecté, vérifié par Firebase via
+// request.auth.uid : chacun ne peut écrire que dans ses propres documents.
+// Lecture ouverte à tout compte connecté, pour la page "Amis" (voir la fiche
+// et la collection des autres). Une carte obtenue est définitive : pas de
+// update/delete depuis le client.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/cards/{cardId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId
-                    && request.resource.data.keys().hasAll(["name", "rarityKey", "packedAt"])
-                    && request.resource.data.name is string
-                    && request.resource.data.rarityKey is string;
-      allow update, delete: if false;
+    // Fiche publique d'un joueur (nom, photo, nombre de cartes).
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+                            && request.resource.data.keys().hasOnly(["name", "photoURL", "updatedAt", "cardCount"]);
+      allow delete: if false;
+
+      match /cards/{cardId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == userId
+                      && request.resource.data.keys().hasAll(["name", "rarityKey", "packedAt"])
+                      && request.resource.data.name is string
+                      && request.resource.data.rarityKey is string;
+        allow update, delete: if false;
+      }
     }
   }
 }

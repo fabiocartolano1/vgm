@@ -206,6 +206,12 @@ const collectionHintEl = document.getElementById("collection-hint");
 const collectionFiltersEl = document.getElementById("collection-filters");
 const collectionStatusEl = document.getElementById("collection-status");
 const collectionGridEl = document.getElementById("collection-grid");
+const collectionTitleEl = document.getElementById("collection-title");
+const collectionBackBtn = document.getElementById("collection-back");
+const tabFriendsBtn = document.getElementById("tab-friends-btn");
+const tabFriendsEl = document.getElementById("tab-friends");
+const friendsStatusEl = document.getElementById("friends-status");
+const friendsListEl = document.getElementById("friends-list");
 const toastEl = document.getElementById("toast");
 
 // ---------- Utilisateur (vraie identité via Firebase Auth / Google) ----------
@@ -247,15 +253,19 @@ function onAuthChanged(user) {
   signinBtn.classList.toggle("hidden", !!user);
   accountSignedInEl.classList.toggle("hidden", !user);
   if (user) {
-    accountAvatarEl.src = user.photoURL || "";
+    accountAvatarEl.hidden = !user.photoURL;
+    if (user.photoURL) accountAvatarEl.src = user.photoURL;
     accountNameEl.textContent = user.displayName || user.email || "Connecté";
+    saveProfile(user);
   }
-  collectionCache = { user: null, cards: null }; // change de compte -> invalide le cache
+  collectionCache.clear(); // change de compte -> invalide le cache
+  viewedFriend = null;
   // rawgProxy exige d'être connecté (voir functions/index.js) : on ne peut
   // vérifier la connexion RAWG qu'une fois identifié, pas avant.
   if (user && !poolsReady) checkApi();
   else renderHome();
   if (activeTab === "collection") loadCollection();
+  if (activeTab === "friends") loadFriends();
 }
 
 function fmtTime(ms) {
@@ -291,13 +301,25 @@ function setActiveTab(tab) {
   tabPackBtn.setAttribute("aria-selected", String(tab === "pack"));
   tabCollectionBtn.classList.toggle("active", tab === "collection");
   tabCollectionBtn.setAttribute("aria-selected", String(tab === "collection"));
+  tabFriendsBtn.classList.toggle("active", tab === "friends");
+  tabFriendsBtn.setAttribute("aria-selected", String(tab === "friends"));
   tabPackEl.classList.toggle("hidden", tab !== "pack");
   tabCollectionEl.classList.toggle("hidden", tab !== "collection");
+  tabFriendsEl.classList.toggle("hidden", tab !== "friends");
   if (tab === "collection") loadCollection();
+  if (tab === "friends") loadFriends();
 }
 
 tabPackBtn.addEventListener("click", () => setActiveTab("pack"));
-tabCollectionBtn.addEventListener("click", () => setActiveTab("collection"));
+tabCollectionBtn.addEventListener("click", () => {
+  viewedFriend = null; // l'onglet Collection ramène toujours à ses propres cartes
+  setActiveTab("collection");
+});
+tabFriendsBtn.addEventListener("click", () => setActiveTab("friends"));
+collectionBackBtn.addEventListener("click", () => {
+  viewedFriend = null;
+  loadCollection();
+});
 
 // ---------- Toast (erreurs de sauvegarde/chargement Firestore) ----------
 
@@ -510,6 +532,11 @@ function saveCardsToFirestore(cards, user) {
         packedAt,
       });
     }
+    batch.set(
+      db.collection("users").doc(user),
+      { cardCount: firebase.firestore.FieldValue.increment(cards.length) },
+      { merge: true }
+    );
     batch.commit().catch((e) => {
       console.error("Sauvegarde Firestore impossible", e);
       showToast("Paquet ouvert, mais la sauvegarde a échoué. Vérifie ta connexion.");
@@ -520,10 +547,36 @@ function saveCardsToFirestore(cards, user) {
   }
 }
 
-let collectionCache = { user: null, cards: null };
+// Fiche publique users/{uid}, lue par la page Amis. Réécrite à chaque
+// connexion pour suivre les changements de nom/photo du compte Google.
+function saveProfile(user) {
+  if (!window.db) return;
+  db.collection("users")
+    .doc(user.uid)
+    .set(
+      {
+        name: user.displayName || "Joueur",
+        photoURL: user.photoURL || null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+    .catch((e) => console.error("Enregistrement du profil impossible", e));
+}
+
+// uid -> cartes triées. Vidé au changement de compte ; l'entrée du joueur
+// connecté est retirée à chaque paquet ouvert.
+const collectionCache = new Map();
 const activeGenreFilters = new Set();
 
+// Ami dont on regarde la collection ({ uid, name }), ou null pour la sienne.
+let viewedFriend = null;
+
 async function loadCollection() {
+  const viewing = viewedFriend;
+  collectionTitleEl.textContent = viewing ? `Collection de ${viewing.name}` : "Collection";
+  collectionBackBtn.classList.toggle("hidden", !viewing);
+
   if (!currentUser) {
     collectionHintEl.textContent = "Connecte-toi pour voir ta collection.";
     collectionHintEl.classList.remove("hidden");
@@ -540,33 +593,37 @@ async function loadCollection() {
     return;
   }
 
-  if (collectionCache.user === currentUser) {
+  const uid = viewing ? viewing.uid : currentUser;
+  activeGenreFilters.clear();
+  if (collectionCache.has(uid)) {
     renderCollection();
     return;
   }
 
-  activeGenreFilters.clear();
   collectionFiltersEl.classList.add("hidden");
   collectionGridEl.innerHTML = "";
   collectionStatusEl.textContent = "Chargement de la collection…";
   collectionStatusEl.classList.remove("hidden");
 
   try {
-    const snap = await db
-      .collection("users")
-      .doc(currentUser)
-      .collection("cards")
-      .orderBy("packedAt", "desc")
-      .get();
-    collectionCache = { user: currentUser, cards: sortByRarityDesc(snap.docs.map((d) => d.data())) };
+    const snap = await db.collection("users").doc(uid).collection("cards").orderBy("packedAt", "desc").get();
+    collectionCache.set(uid, sortByRarityDesc(snap.docs.map((d) => d.data())));
+    // Recale le compteur affiché sur la page Amis sur le vrai total (les
+    // cartes obtenues avant l'ajout du compteur n'y sont pas comptées).
+    if (!viewing) {
+      db.collection("users")
+        .doc(uid)
+        .set({ cardCount: snap.size }, { merge: true })
+        .catch((e) => console.error("Mise à jour du compteur impossible", e));
+    }
   } catch (e) {
     console.error("Chargement de la collection impossible", e);
-    collectionStatusEl.textContent = "Erreur de chargement de la collection.";
-    collectionCache = { user: currentUser, cards: [] };
+    if (viewedFriend === viewing) collectionStatusEl.textContent = "Erreur de chargement de la collection.";
     return;
   }
 
-  renderCollection();
+  // L'utilisateur a pu changer de collection (retour, onglet) pendant le chargement.
+  if (viewedFriend === viewing) renderCollection();
 }
 
 function buildGenreFilters(cards) {
@@ -651,11 +708,14 @@ function buildMiniCard(card, imgObserver) {
 }
 
 function renderCollection() {
-  const cards = collectionCache.cards || [];
+  const uid = viewedFriend ? viewedFriend.uid : currentUser;
+  const cards = collectionCache.get(uid) || [];
   buildGenreFilters(cards);
 
   if (cards.length === 0) {
-    collectionStatusEl.textContent = "Aucune carte pour l'instant. Ouvre un paquet !";
+    collectionStatusEl.textContent = viewedFriend
+      ? `${viewedFriend.name} n'a pas encore de carte.`
+      : "Aucune carte pour l'instant. Ouvre un paquet !";
     collectionStatusEl.classList.remove("hidden");
     collectionGridEl.innerHTML = "";
     return;
@@ -678,6 +738,79 @@ function renderCollection() {
     ? new IntersectionObserver(handleMiniCardIntersect, { rootMargin: "400px 0px" })
     : null;
   for (const card of filtered) collectionGridEl.appendChild(buildMiniCard(card, imgObserver));
+}
+
+// ---------- Amis ----------
+
+async function loadFriends() {
+  friendsListEl.innerHTML = "";
+  if (!currentUser) {
+    friendsStatusEl.textContent = "Connecte-toi pour voir les collections des autres.";
+    friendsStatusEl.classList.remove("hidden");
+    return;
+  }
+  if (!window.db) {
+    friendsStatusEl.textContent = "Firestore indisponible.";
+    friendsStatusEl.classList.remove("hidden");
+    return;
+  }
+
+  friendsStatusEl.textContent = "Chargement…";
+  friendsStatusEl.classList.remove("hidden");
+
+  let friends;
+  try {
+    const snap = await db.collection("users").orderBy("name").get();
+    friends = snap.docs.filter((d) => d.id !== currentUser).map((d) => ({ uid: d.id, ...d.data() }));
+  } catch (e) {
+    console.error("Chargement des amis impossible", e);
+    friendsStatusEl.textContent = "Erreur de chargement des amis.";
+    return;
+  }
+  if (activeTab !== "friends") return;
+
+  if (friends.length === 0) {
+    friendsStatusEl.textContent = "Personne d'autre ne s'est encore connecté.";
+    return;
+  }
+  friendsStatusEl.classList.add("hidden");
+  for (const friend of friends) friendsListEl.appendChild(buildFriendRow(friend));
+}
+
+function buildFriendRow(friend) {
+  const row = document.createElement("button");
+  row.className = "friend-row";
+
+  // Photo Google si dispo, sinon l'initiale du nom.
+  let avatar;
+  if (friend.photoURL) {
+    avatar = document.createElement("img");
+    avatar.alt = "";
+    avatar.referrerPolicy = "no-referrer"; // les photos Google refusent parfois les requêtes avec referrer
+    avatar.src = friend.photoURL;
+  } else {
+    avatar = document.createElement("span");
+    avatar.textContent = (friend.name || "?").charAt(0).toUpperCase();
+  }
+  avatar.className = "friend-avatar";
+  row.appendChild(avatar);
+
+  const name = document.createElement("span");
+  name.className = "friend-name";
+  name.textContent = friend.name;
+  row.appendChild(name);
+
+  const count = document.createElement("span");
+  count.className = "friend-count";
+  const n = friend.cardCount || 0;
+  count.textContent = `${n} carte${n > 1 ? "s" : ""}`;
+  row.appendChild(count);
+
+  row.addEventListener("click", () => {
+    viewedFriend = { uid: friend.uid, name: friend.name };
+    setActiveTab("collection");
+  });
+  return row;
 }
 
 // ---------- Reveal UI ----------
@@ -823,7 +956,7 @@ async function openPack() {
   packEl.classList.remove("loading");
   consumePack();
   saveCardsToFirestore(cards, currentUser);
-  collectionCache = { user: null, cards: null }; // le paquet ouvert invalide le cache
+  collectionCache.delete(currentUser); // le paquet ouvert invalide le cache
 
   currentCards = cards;
   currentIndex = 0;
