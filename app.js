@@ -26,16 +26,18 @@ const ALLOWED_PLATFORMS_PARAM = ALLOWED_PLATFORMS.join(",");
 
 const CARDS_PER_PACK = 5;
 
-// Rareté basée sur "added" (nb réel de joueurs ayant ajouté le jeu sur RAWG),
-// l'équivalent jeu vidéo des vues mensuelles d'un article Wikipédia.
+// Rareté = rang du jeu dans le classement mondial RAWG par nombre de joueurs
+// l'ayant ajouté ("added") : Légendaire = top 100, Ultra rare = top 400,
+// Super rare = top 1 500, Rare = top 5 000, Peu commune = top 10 000.
+// min = nombre de joueurs correspondant (voir TIER_RANKS).
 // packOdds = chance que la MEILLEURE carte du paquet soit de cette rareté.
 const RARITIES = [
   { key: "c",  label: "C",  name: "Commune",     color: "#b8f2d5", min: 0,    packOdds: 0.575 },
-  { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 20,   packOdds: 0.15 },
-  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 80,   packOdds: 0.14 },
-  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 300,  packOdds: 0.08 },
-  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 1200, packOdds: 0.04 },
-  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 6000, packOdds: 0.015 },
+  { key: "pc", label: "PC", name: "Peu commune", color: "#b1cff2", min: 174,  packOdds: 0.15 },
+  { key: "r",  label: "R",  name: "Rare",        color: "#c6a7f2", min: 460,  packOdds: 0.14 },
+  { key: "sr", label: "SR", name: "Super rare",  color: "#ed6fa3", min: 1636, packOdds: 0.08 },
+  { key: "ur", label: "UR", name: "Ultra rare",  color: "#fa9931", min: 4567, packOdds: 0.04 },
+  { key: "l",  label: "L",  name: "Légendaire",  color: "#ffe144", min: 8566, packOdds: 0.015 },
 ];
 const RARITY_BY_KEY = Object.fromEntries(RARITIES.map((r) => [r.key, r]));
 const RARITY_ORDER = Object.fromEntries(RARITIES.map((r, i) => [r.key, i]));
@@ -87,39 +89,39 @@ const GUARANTEED_TIER = RARITIES.findIndex((r) => r.key === "r");
   }
 })();
 
-// Par console, nb de jeux (triés par -added, pagination RAWG plafonnée à 10 000)
-// ayant added >= [20, 80, 300, 1200, 6000], précalculé le 2026-09-27.
-// Format : [accessibles, >=20, >=80, >=300, >=1200, >=6000]
+// Par console, nombre de jeux (DLC exclus, triés par -added, pagination RAWG
+// plafonnée à 10 000) au-dessus de chaque seuil de rareté. Calculé le
+// 2026-09-28 par scripts/compute-tiers.mjs (workflow "Calculer les tranches
+// de rareté") : les seuils sont le nombre de joueurs du jeu classé 10 000e,
+// 5 000e, 1 500e, 400e et 100e toutes consoles autorisées confondues.
+// Format : [accessibles, >=174 (PC), >=460 (R), >=1636 (SR), >=4567 (UR), >=8566 (L)]
 const TIER_RANKS = {
-  4:   [10000, 10000, 10000, 6950, 2267, 290],
-  27:  [1699, 586, 258, 100, 33, 1],
-  15:  [3151, 967, 534, 235, 76, 9],
-  16:  [3209, 1940, 1442, 938, 486, 102],
-  18:  [7050, 4656, 3505, 2236, 1083, 189],
-  187: [1565, 1116, 804, 453, 183, 27],
-  80:  [881, 435, 280, 143, 61, 9],
-  14:  [2834, 1837, 1411, 901, 481, 110],
-  1:   [5750, 3929, 3101, 2062, 1064, 192],
-  186: [1301, 965, 732, 432, 171, 21],
-  7:   [5807, 3546, 2570, 1502, 652, 98],
-  9:   [2507, 447, 245, 104, 33, 3],
-  8:   [1682, 468, 275, 130, 51, 3],
-  19:  [1462, 781, 580, 340, 143, 23],
-  17:  [1457, 409, 226, 102, 26, 0],
-  10:  [1114, 533, 368, 208, 84, 15],
-  11:  [2238, 743, 440, 201, 62, 4],
-  105: [673, 342, 202, 83, 28, 2],
-  83:  [363, 146, 73, 32, 10, 1],
-  43:  [431, 117, 49, 23, 6, 0],
-  24:  [967, 358, 185, 69, 14, 0],
+  4:   [10000, 9229, 4693, 1440, 390, 99],
+  27:  [1677, 144, 69, 25, 3, 0],
+  15:  [3106, 326, 161, 58, 14, 3],
+  16:  [2797, 1030, 703, 348, 138, 33],
+  18:  [6199, 2450, 1677, 744, 246, 69],
+  187: [1383, 535, 318, 122, 41, 12],
+  80:  [865, 183, 106, 51, 16, 4],
+  14:  [2543, 991, 680, 351, 145, 40],
+  1:   [4999, 2244, 1585, 747, 253, 70],
+  186: [1142, 514, 305, 114, 36, 10],
+  7:   [5383, 1749, 1127, 438, 133, 33],
+  9:   [2446, 140, 81, 23, 7, 0],
+  8:   [1609, 171, 94, 34, 5, 2],
+  19:  [1355, 406, 249, 99, 33, 11],
+  17:  [1384, 130, 67, 16, 1, 0],
+  10:  [1040, 253, 153, 57, 18, 4],
+  11:  [2174, 284, 137, 38, 8, 0],
+  105: [662, 109, 58, 21, 3, 0],
+  83:  [358, 48, 24, 4, 1, 0],
+  43:  [421, 28, 15, 4, 0, 0],
+  24:  [929, 104, 41, 7, 1, 0],
 };
 
-// TIER_RANKS a été calculé avec les DLC/extensions inclus dans le total de
-// chaque console ; exclude_additions (voir drawOneGameAttempt) réduit le
-// nombre réel de pages disponibles, surtout sur les consoles récentes très
-// chargées en DLC (PC, PS4/5, Xbox One/Series, Switch). Le plafond appris
-// via platformAccessible corrige ça une fois qu'on a détecté un dépassement,
-// pour ne plus retomber sur des rangs hors limites (404 en boucle).
+// Filet de sécurité : si RAWG a retiré des jeux depuis le calcul, un rang
+// tiré peut dépasser le vrai total d'une console (404). On apprend alors ce
+// total (une fois par console) pour ne plus retomber hors limites.
 const platformAccessible = {};
 
 // Plage de rangs [start, end) de la rareté d'index i sur une console.
@@ -486,8 +488,9 @@ async function drawPack() {
   const cards = games.map((g, i) => {
     const detail = details[i] || g;
     const added = g.added || 0;
-    // Rareté = tranche tirée (et non recalculée depuis "added") : les tranches
-    // de TIER_RANKS incluaient les DLC, un recalcul pourrait casser la garantie.
+    // Rareté = tranche tirée (et non recalculée depuis "added") : le "added"
+    // d'un jeu évolue depuis le calcul de TIER_RANKS, un recalcul pourrait
+    // faire changer une carte de rareté et casser la garantie du paquet.
     const rarity = RARITIES[drawn[i].tierIndex];
     const atk = detail.metacritic ?? Math.round((detail.rating || 0) * 20);
     const def = Math.min(100, Math.round(Math.log10(added + 1) * 40));
