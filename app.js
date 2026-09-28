@@ -109,10 +109,35 @@ const TIER_RANKS = {
   24:  [967, 358, 185, 69, 14, 0],
 };
 
+// TIER_RANKS a été calculé avec les DLC/extensions inclus dans le total de
+// chaque console ; exclude_additions (voir drawOneGameAttempt) réduit le
+// nombre réel de pages disponibles, surtout sur les consoles récentes très
+// chargées en DLC (PC, PS4/5, Xbox One/Series, Switch). Le plafond appris
+// via platformAccessible corrige ça une fois qu'on a détecté un dépassement,
+// pour ne plus retomber sur des rangs hors limites (404 en boucle).
+const platformAccessible = {};
+
 // Plage de rangs [start, end) de la rareté d'index i sur une console.
 function tierRange(platformId, i) {
   const t = TIER_RANKS[platformId];
-  return [t[i + 1] ?? 0, t[i]];
+  const cap = Math.min(t[0], platformAccessible[platformId] ?? Infinity);
+  const end = Math.min(t[i] ?? 0, cap);
+  const start = Math.min(t[i + 1] ?? 0, end);
+  return [start, end];
+}
+
+// Lit le nombre réel de jeux (hors DLC) pour une console via le champ
+// "count" de RAWG, et met à jour le plafond pour tous les tirages suivants.
+async function learnAccessibleCount(platformId) {
+  try {
+    const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=1&platforms=${platformId}&ordering=-added&exclude_additions=true`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (typeof data.count === "number") platformAccessible[platformId] = data.count;
+  } catch (e) {
+    console.error("Comptage RAWG impossible pour la plateforme " + platformId, e);
+  }
 }
 
 // ---------- Pack storage (en mémoire seulement pour le POC) ----------
@@ -292,9 +317,12 @@ async function drawOneGameAttempt(tierIndex) {
   const rank = start + Math.floor(Math.random() * (end - start));
   const url = `${RAWG_BASE}?key=${RAWG_API_KEY}&page_size=1&page=${rank + 1}&platforms=${platformId}&ordering=-added&exclude_additions=true`;
   const res = await fetch(url);
-  // TIER_RANKS a été calculé DLC compris : un rang en fin de liste peut
-  // désormais dépasser la dernière page (404) -> on retente.
-  if (res.status === 404) return null;
+  if (res.status === 404) {
+    // Rang au-delà du total réel (hors DLC) -> on apprend le vrai plafond
+    // pour cette console (une seule fois) et on retente avec une plage corrigée.
+    if (!(platformId in platformAccessible)) await learnAccessibleCount(platformId);
+    return null;
+  }
   if (!res.ok) throw new Error("RAWG error " + res.status);
   const data = await res.json();
   const game = (data.results || [])[0];
@@ -380,28 +408,36 @@ async function drawPack() {
 // users/{user}/cards/{id} : append-only (voir firestore.rules), une carte
 // par jeu obtenu. Pas d'authentification : "user" n'est qu'une étiquette.
 
+// Ne doit jamais faire planter openPack() : une erreur ici (Firestore mal
+// initialisé, SDK bloqué par un ad-blocker...) ne doit pas empêcher la
+// révélation d'un paquet déjà tiré et décompté.
 function saveCardsToFirestore(cards, user) {
   if (!window.db || !user) return;
-  const ref = db.collection("users").doc(user).collection("cards");
-  const packedAt = firebase.firestore.FieldValue.serverTimestamp();
-  const batch = db.batch();
-  for (const card of cards) {
-    batch.set(ref.doc(), {
-      name: card.name,
-      image: card.image || null,
-      platforms: card.platforms,
-      genres: card.genres,
-      summary: card.summary,
-      rarityKey: card.rarity.key,
-      atk: card.atk,
-      def: card.def,
-      packedAt,
+  try {
+    const ref = db.collection("users").doc(user).collection("cards");
+    const packedAt = firebase.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+    for (const card of cards) {
+      batch.set(ref.doc(), {
+        name: card.name,
+        image: card.image || null,
+        platforms: card.platforms,
+        genres: card.genres,
+        summary: card.summary,
+        rarityKey: card.rarity.key,
+        atk: card.atk,
+        def: card.def,
+        packedAt,
+      });
+    }
+    batch.commit().catch((e) => {
+      console.error("Sauvegarde Firestore impossible", e);
+      showToast("Paquet ouvert, mais la sauvegarde a échoué. Vérifie ta connexion.");
     });
-  }
-  batch.commit().catch((e) => {
+  } catch (e) {
     console.error("Sauvegarde Firestore impossible", e);
     showToast("Paquet ouvert, mais la sauvegarde a échoué. Vérifie ta connexion.");
-  });
+  }
 }
 
 let collectionCache = { user: null, cards: null };
