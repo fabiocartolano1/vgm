@@ -1063,3 +1063,5 @@ howModal.addEventListener("click", (e) => {
 setActiveTab("pack");
 renderHome();
 auth.onAuthStateChanged(onAuthChanged);
+
+document.getElementById("app-version").textContent = "v" + APP_VERSION;

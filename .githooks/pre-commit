@@ -1,0 +1,13 @@
+#!/bin/sh
+# Passe APP_VERSION (version.js) à +1 sur le dernier chiffre à chaque commit
+# et ajoute le fichier au commit. Activation, une fois par clone :
+#   git config core.hooksPath .githooks
+set -e
+f="$(git rev-parse --show-toplevel)/version.js"
+[ -f "$f" ] || exit 0
+current=$(sed -n 's/.*APP_VERSION = "\([0-9]*\.[0-9]*\.[0-9]*\)".*/\1/p' "$f")
+[ -n "$current" ] || { echo "pre-commit: version introuvable dans version.js" >&2; exit 1; }
+next=$(echo "$current" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')
+sed -i.bak "s/APP_VERSION = \"$current\"/APP_VERSION = \"$next\"/" "$f" && rm -f "$f.bak"
+git add "$f"
+echo "version: $current -> $next"

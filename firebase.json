@@ -12,6 +12,7 @@
       "firestore.indexes.json",
       "functions",
       "scripts",
+      "CLAUDE.md",
       "**/.*",
       "**/node_modules/**"
     ]

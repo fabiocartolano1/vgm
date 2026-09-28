@@ -906,3 +906,16 @@ footer a { color: var(--muted); }
   .nav-arrows { margin-top: 8px; }
   .reveal .btn-open { margin-top: 12px; }
 }
+
+/* ---------- Version ---------- */
+
+.app-version {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 10;
+}
